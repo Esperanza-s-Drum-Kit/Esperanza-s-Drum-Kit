@@ -4,7 +4,7 @@
 // Time unit everywhere is the STEP: one 16th note. A 4/4 bar is 16 steps.
 'use strict';
 const M = {};
-M.VERSION = '0.1.0';
+M.VERSION = '0.2.0';
 M.FORMAT = 1;
 M.STEPS_PER_BAR = 16;
 M.COLORS = ['#C4382A', '#D99A2B', '#7A8B3E', '#5E8FA8', '#B5653A', '#8C4A6B', '#3F7F73', '#C9B27C', '#6A5ACD', '#9C7B4E', '#D0614C', '#4E6E8E'];
@@ -36,7 +36,7 @@ M.newPattern = (proj, name) => {
 M.newProject = () => {
   const p = {
     format: M.FORMAT, app: 'edk', made: M.VERSION, name: 'Untitled', bpm: 140, swing: 0, mode: 'pat',
-    master: M.defMaster(), channels: [], patterns: [], cur: null, sel: null,
+    master: M.defMaster(), feel: ENG.defFeel(), channels: [], patterns: [], cur: null, sel: null, loop: { on: false, start: 0, len: 64 }, sections: [],
     playlist: { tracks: 12, clips: [], names: [] }, created: Date.now(),
   };
   for (const [name, sound] of [['Kick', 'roast/kick'], ['Clap', 'roast/clap'], ['Hat', 'roast/chat'], ['Snare', 'roast/snare']]) {
@@ -61,7 +61,15 @@ M.homeNote = (type, sound, synthIdx) => {
 M.patLen = (pat) => pat.len;
 M.songLen = (proj) => {
   let e = 0; for (const c of proj.playlist.clips) e = Math.max(e, c.start + c.len);
+  for (const s of proj.sections || []) e = Math.max(e, s.start + s.len);
   return Math.max(M.STEPS_PER_BAR, Math.ceil(e / M.STEPS_PER_BAR) * M.STEPS_PER_BAR);
+};
+// song sections: names people use, each with its own colour
+M.SECTION_KINDS = [['Intro', '#5E8FA8'], ['Verse', '#7A8B3E'], ['Pre-chorus', '#C9B27C'], ['Chorus', '#D99A2B'], ['Hook', '#E0A93C'], ['Bridge', '#8C4A6B'], ['Breakdown', '#3F7F73'], ['Drop', '#C4382A'], ['Interlude', '#9C7B4E'], ['Outro', '#6A5ACD']];
+M.newSection = (proj, kind, start, len) => {
+  const k = M.SECTION_KINDS.find((x) => x[0] === kind) || [kind, '#B5653A'];
+  const same = (proj.sections || []).filter((s) => s.kind === k[0]).length;
+  return { id: U.uid('s'), kind: k[0], name: k[0] + (same ? ' ' + (same + 1) : ''), color: k[1], start, len };
 };
 M.channelGain = (ch) => ch.vol * ch.vol * 1.64; // 78% is unity, 125% is about +8 dB
 
@@ -70,6 +78,9 @@ M.migrate = (p) => {
   p.master = Object.assign(M.defMaster(), p.master || {});
   p.playlist = Object.assign({ tracks: 12, clips: [], names: [] }, p.playlist || {});
   p.swing = p.swing || 0; p.mode = p.mode || 'pat';
+  p.feel = Object.assign(ENG.defFeel(), p.feel || {});
+  p.loop = Object.assign({ on: false, start: 0, len: 64 }, p.loop || {});
+  p.sections = p.sections || [];
   for (const ch of p.channels) {
     if (ch.type === 'sampler') ch.p = Object.assign(SOUND.samplerParams(ch.sound), ch.p || {});
     if (ch.type === 'synth') ch.p = Object.assign(SOUND.synthDefault(), ch.p || {});
@@ -98,5 +109,5 @@ class History {
   undo() { if (!this.past.length) return null; this.future.push(this.last); this.last = this.past.pop(); this.group = null; return JSON.parse(this.last); }
   redo() { if (!this.future.length) return null; this.past.push(this.last); this.last = this.future.pop(); this.group = null; return JSON.parse(this.last); }
 }
-History.CONT = /^(vol|pan|p:|swing|bpm|mvol|note)/;
+History.CONT = /^(vol|pan|p:|swing|bpm|mvol|note|feel)/;
 M.History = History;

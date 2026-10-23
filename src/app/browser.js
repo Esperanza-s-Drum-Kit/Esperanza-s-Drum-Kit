@@ -43,6 +43,8 @@ BROWSER.init = () => {
     if (it.dataset.sound) A.addSoundChannel(it.dataset.sound, true); else if (it.dataset.synth !== undefined) A.addSynthChannel(+it.dataset.synth);
   });
   el.addEventListener('dragstart', (e) => { const it = e.target.closest('.bitem'); if (it && it.dataset.sound) { e.dataTransfer.setData('text/edk-sound', it.dataset.sound); e.dataTransfer.effectAllowed = 'copy'; } });
+  UI.$('#recOpen').onclick = REC.open;
+  UI.$('#fileOpen').onclick = async () => { const files = await U.pickFile('audio/*,.wav,.mp3,.ogg,.flac,.m4a,.aif,.aiff', true); for (const f of files) await A.loadSampleFile(f, null); };
   UI.$('#browserFind').addEventListener('input', (e) => { BROWSER.filter = e.target.value; BROWSER.render(); });
 };
 
@@ -62,11 +64,13 @@ PANEL.open = (id) => {
   inner += `<div class="field">Colour <div class="swatches">${M.COLORS.map((c) => `<button data-col="${c}" class="${c === ch.color ? 'on' : ''}" style="background:${c}" aria-label="Colour ${c}"></button>`).join('')}</div></div>`;
   inner += `<div class="krow">${UI.knobLabeled('Volume', { min: 0, max: 1.25, def: 0.78, get: () => ch.vol, set: (v, d) => { ch.vol = v; A.change('vol' + id, { quiet: !d, rack: d }); }, fmt: (v) => Math.round(v * 100) + '%' })}
     ${UI.knobLabeled('Pan', { min: -1, max: 1, def: 0, bipolar: true, get: () => ch.pan, set: (v, d) => { ch.pan = Math.abs(v) < 0.02 ? 0 : v; A.change('pan' + id, { quiet: !d, rack: d }); }, fmt: RACK.fmtPan })}
+    ${UI.knobLabeled('Feel', { min: 0, max: 2, def: 1, get: () => (ch.feel === undefined ? 1 : ch.feel), set: (v, d) => { ch.feel = Math.abs(v - 1) < 0.03 ? undefined : v; A.change('feelch' + id, { quiet: !d }); if (d) RACK.feelMarks(); }, fmt: (v) => (v < 0.01 ? 'On grid' : Math.round(v * 100) + '%') })}
     ${UI.knobLabeled('Home note', { min: 24, max: 96, step: 1, def: 60, get: () => ch.note || 60, set: (v, d) => { ch.note = Math.round(v); A.change('note' + id, { quiet: !d }); if (d) A.eng.preview(id, ch.note, M.DEF_VEL); }, fmt: UI.noteName })}</div>`;
   if (ch.type === 'sampler') {
     const opts = SOUND.catalog().map((x) => `<option value="${x.id}"${x.id === ch.sound && !ch.sample ? ' selected' : ''}>${UI.esc(x.group + ' · ' + x.name)}</option>`).join('')
       + Array.from(ENG.userSamples.entries()).map(([sid, x]) => `<option value="${sid}"${sid === ch.sample ? ' selected' : ''}>${UI.esc('Your samples · ' + x.name)}</option>`).join('');
     inner += `<div class="field">Sound <select id="pSound">${opts}</select></div>`;
+    inner += `<h3>Sample</h3><div class="tools"><button class="btn" data-tool="rev">Reverse</button><button class="btn" data-tool="norm">Normalize</button><button class="btn${ch.p.loop ? ' on' : ''}" data-tool="loop">${ch.p.loop ? 'Looping' : 'Loop off'}</button><span class="sub">Fit to</span><button class="btn" data-fit="1">1 bar</button><button class="btn" data-fit="2">2</button><button class="btn" data-fit="4">4</button><button class="btn" data-fit="8">8</button></div>`;
     const base = SOUND.samplerParams(ch.sample ? null : ch.sound).tune; // 808s carry a small built-in correction
     inner += sec('Pitch', UI.knobLabeled('Pitch', { min: -2400 + base, max: 2400 + base, def: base, bipolar: true, get: () => ch.p.tune,
       set: (v, d) => { ch.p.tune = Math.round((v - base) / 100) * 100 + base; A.change('p:tune' + id, { quiet: !d }); }, fmt: (v) => { const st = Math.round((v - base) / 100); return (st > 0 ? '+' : '') + st + ' st'; } })
@@ -89,6 +93,13 @@ PANEL.open = (id) => {
   UI.$$('#panel [data-col]').forEach((b) => (b.onclick = () => { ch.color = b.dataset.col; A.change('col', { rack: true }); PANEL.open(id); }));
   const snd = UI.$('#pSound'); if (snd) snd.onchange = () => { A.setSound(ch, snd.value); PANEL.open(id); };
   const pre = UI.$('#pPreset'); if (pre) pre.onchange = () => { ch.preset = +pre.value; ch.p = JSON.parse(JSON.stringify(SOUND.SYNTHS[ch.preset][1])); A.change('preset', { rack: true }); A.eng.preview(id, ch.note || 60, M.DEF_VEL); PANEL.open(id); };
+  UI.$$('#panel [data-tool]').forEach((b) => (b.onclick = () => {
+    const t = b.dataset.tool;
+    if (t === 'rev') SMP.edit(ch, SMP.reverse, 'rev');
+    else if (t === 'norm') SMP.edit(ch, SMP.normalize, 'norm');
+    else { ch.p.loop = !ch.p.loop; if (ch.p.loop) ch.p.oneshot = false; A.change('loop'); PANEL.open(id); }
+  }));
+  UI.$$('#panel [data-fit]').forEach((b) => (b.onclick = () => SMP.fit(ch, +b.dataset.fit)));
   const one = UI.$('#pOne'); if (one) one.onclick = () => { ch.p.oneshot = !ch.p.oneshot; A.change('oneshot'); PANEL.open(id); };
   const mono = UI.$('#pMono'); if (mono) mono.onclick = () => { ch.p.mono = !ch.p.mono; A.change('mono'); PANEL.open(id); };
 };

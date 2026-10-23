@@ -19,10 +19,68 @@ ENG.stepDur = (bpm) => 60 / bpm / 4;
 // swing delays every second 16th; 100% pushes it half a step late (a heavy shuffle)
 ENG.swingOff = (proj, k) => ((k & 1) ? proj.swing * 0.5 * ENG.stepDur(proj.bpm) : 0);
 
+// ---------------- Feel: musical humanizing ----------------
+// amount 0 = exactly on the grid; 1 = a loose live player. push < 0 lays back behind the beat, > 0 rushes ahead.
+// dynamics shapes velocity by where a hit falls in the bar. Same settings + same take = the same performance every time.
+ENG.FEEL_PRESETS = [
+  ['Machine', { amount: 0, push: 0, dynamics: 0 }],
+  ['Studio tight', { amount: 0.18, push: 0, dynamics: 0.3 }],
+  ['In the pocket', { amount: 0.35, push: -0.35, dynamics: 0.5 }],
+  ['Laid back', { amount: 0.45, push: -0.8, dynamics: 0.5 }],
+  ['Live drummer', { amount: 0.6, push: -0.15, dynamics: 0.7 }],
+  ['Rushing', { amount: 0.45, push: 0.7, dynamics: 0.45 }],
+  ['Loose', { amount: 0.8, push: -0.3, dynamics: 0.6 }],
+  ['Drunk', { amount: 1, push: -0.6, dynamics: 0.35 }],
+];
+ENG.defFeel = () => ({ amount: 0, push: 0, dynamics: 0, vary: false, take: 1 });
+// what kind of player a channel is, from its sound or name: decides how much it moves and which way
+ENG.role = (ch) => {
+  const k = ((ch.sound || '') + ' ' + ch.name).toLowerCase();
+  if (/808|bass/.test(k)) return 'bass';
+  if (/kick|bd\b/.test(k)) return 'kick';
+  if (/snare|clap|rim/.test(k)) return 'snare';
+  if (/hat|ride|shaker|crash|cym/.test(k)) return 'hat';
+  if (ch.type === 'synth') return 'keys';
+  return 'perc';
+};
+// [timing spread at full amount (ms), lay-back depth at full push (ms), velocity spread]
+ENG.ROLES = { kick: [6, 2, 0.06], snare: [10, 18, 0.1], hat: [14, 10, 0.18], perc: [12, 9, 0.14], bass: [8, 7, 0.08], keys: [10, 8, 0.1] };
+const hashStr = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+const rnd01 = (a) => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const gauss = (seed) => { const u = Math.max(1e-9, rnd01(seed)), v = rnd01(seed ^ 0x9E3779B9); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+// metric weight of a 16th step inside the bar: downbeat > beats > 8ths > 16ths
+ENG.weight = (ps) => (ps % 16 === 0 ? 1 : ps % 4 === 0 ? 0.88 : ps % 2 === 0 ? 0.74 : 0.6);
+ENG.feel = (proj, ch, pat, ps, k, sd) => {
+  const f = proj.feel, amt = f ? f.amount * (ch.feel === undefined ? 1 : ch.feel) : 0;
+  const dyn = f ? f.dynamics * (ch.feel === undefined ? 1 : Math.min(1, ch.feel)) : 0;
+  if (!amt && !dyn && !(f && f.push && amt)) return { dt: 0, vm: 1 };
+  const [spread, back, vspread] = ENG.ROLES[ENG.role(ch)];
+  // the seed follows the step inside its pattern, so every pass plays the same take (unless "vary each pass")
+  const pass = f.vary ? Math.floor(k / pat.len) : 0;
+  const base = hashStr(ch.id + '|' + pat.id) ^ Math.imul(f.take || 1, 0x85EBCA6B) ^ Math.imul(pass + 1, 0xC2B2AE35);
+  // smooth drift: today's hit leans on the last two, like a player's hands, not independent dice
+  const n = (i) => gauss(base ^ Math.imul(((ps + i + pat.len) % pat.len) + 1, 0x27D4EB2F));
+  const drift = 0.6 * n(0) + 0.3 * n(-1) + 0.1 * n(-2);
+  const curve = Math.pow(amt, 1.6);
+  let ms = drift * spread * curve - f.push * back * Math.min(1, amt * 1.8);
+  const lim = Math.min(45, sd * 1000 * 0.4); ms = Math.max(-lim, Math.min(lim, ms));
+  const w = ENG.weight(ps);
+  let vm = 1 - dyn * (1 - w) * 0.85;
+  vm *= 1 + gauss(base ^ Math.imul(ps + 1, 0x165667B1)) * vspread * curve;
+  return { dt: ms / 1000, vm: Math.max(0.05, Math.min(1.25, vm)) };
+};
+
 // What plays at song/pattern step k: [{pat, ps}] where ps is the step inside that pattern
+// song position for an ever-counting step k: wraps the loop region when it is on, else the whole song.
+// mode 'raw' takes k as the song position itself (renders of one section).
+ENG.songPos = (proj, k) => {
+  const lp = proj.loop;
+  if (lp && lp.on && lp.len > 0 && k >= lp.start) return lp.start + ((k - lp.start) % lp.len);
+  return k % M.songLen(proj);
+};
 ENG.slicesAt = (proj, k, mode) => {
   if (mode === 'pat') { const pat = M.pat(proj); return pat ? [{ pat, ps: k % pat.len }] : []; }
-  const L = M.songLen(proj), pos = k % L, out = [];
+  const pos = mode === 'raw' ? k : ENG.songPos(proj, Math.floor(k)), out = [];
   for (const c of proj.playlist.clips) {
     if (pos < c.start || pos >= c.start + c.len) continue;
     const pat = M.pat(proj, c.pat); if (!pat) continue;
@@ -41,9 +99,10 @@ ENG.events = (proj, mode, k0, k1, stepTime, sr) => {
     for (const { pat, ps } of slices) {
       for (const ch of proj.channels) {
         const c = M.cell(pat, ch.id, ps); if (!c) continue;
-        const f = Math.round(t * sr), gate = Math.max(8, Math.round((c.g || 1) * sd * sr) - Math.round(sr * 0.002));
+        const fe = ENG.feel(proj, ch, pat, ps, k, sd);
+        const f = Math.max(0, Math.round((t + fe.dt) * sr)), gate = Math.max(8, Math.round((c.g || 1) * sd * sr) - Math.round(sr * 0.002));
         let a = out.get(ch.id); if (!a) out.set(ch.id, (a = []));
-        a.push([f, 1, c.n, c.v], [f + gate, 0, c.n, 0]);
+        a.push([f, 1, c.n, Math.min(1, c.v * fe.vm)], [f + gate, 0, c.n, 0]);
       }
     }
   }
@@ -183,15 +242,18 @@ ENG.Engine = Engine;
 
 // ---------------- offline render (export, tests) ----------------
 // mode 'song' renders the playlist once; 'pat' renders the current pattern `loops` times
+// opts.range = {start, len} renders that stretch of the song once (a section)
 ENG.render = async (proj, opts) => {
   opts = opts || {};
-  const sr = opts.sr || 48000, mode = opts.mode || proj.mode, loops = opts.loops || 1;
-  const steps = mode === 'song' ? M.songLen(proj) : M.pat(proj).len * loops;
+  const sr = opts.sr || 48000, range = opts.range || null, mode = range ? 'raw' : opts.mode || proj.mode, loops = opts.loops || 1;
+  if (!range && mode === 'song') proj = Object.assign({}, proj, { loop: Object.assign({}, proj.loop, { on: false }) }); // a song export plays the whole song
+  const steps = range ? range.len : mode === 'song' ? M.songLen(proj) : M.pat(proj).len * loops;
+  const k0 = range ? range.start : 0;
   const sd = ENG.stepDur(proj.bpm), tail = opts.tail !== undefined ? opts.tail : 2;
   const frames = Math.ceil((steps * sd + tail) * sr);
   const ctx = new OfflineAudioContext(2, frames, sr);
   await ENG.addWorklet(ctx);
-  const ev = ENG.events(proj, mode, 0, steps, (k) => k * sd, sr);
+  const ev = ENG.events(proj, mode, k0, k0 + steps, (k) => (k - k0) * sd, sr);
   const g = new Graph(ctx, false, ev, proj); g.mSig = JSON.stringify(proj.master.ch); g.sync(proj);
   const buf = await ctx.startRendering();
   return { buf, steps, sr, events: ev };

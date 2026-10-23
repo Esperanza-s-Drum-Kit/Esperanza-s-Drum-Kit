@@ -29,8 +29,49 @@ RACK.render = () => {
   }).join('');
   el.innerHTML = `<div class="rack">${rows}<div class="rackfoot"><button class="btn" data-act="add">+ Add channel</button><span class="hide-phone">Click a step to add a hit · drag to paint · right-click to remove · drop sounds or audio files on a name</span></div></div>`;
   RACK.nowCol = -1;
+  setTimeout(RACK.feelMarks, 0);
   UI.$('#swingK').innerHTML = UI.knob({ name: 'Swing', min: 0, max: 1, def: 0, get: () => p.swing, set: (v, done) => { p.swing = v; A.change('swing', { quiet: !done }); }, fmt: (v) => Math.round(v * 100) + '%' });
   UI.$('#patLen').value = String(len);
+  UI.$('#feelK').innerHTML = UI.knob({ name: 'Feel', min: 0, max: 1, def: 0, get: () => p.feel.amount, set: (v, done) => { p.feel.amount = v; A.change('feel', { quiet: !done }); RACK.feelLabel(); }, fmt: RACK.fmtFeel });
+  RACK.feelLabel();
+};
+RACK.fmtFeel = (v) => (v < 0.01 ? 'Machine' : Math.round(v * 100) + '%');
+RACK.feelLabel = () => { const b = UI.$('#feelBtn'); if (!b) return; const f = A.proj.feel, pr = ENG.FEEL_PRESETS.find(([, x]) => Math.abs(x.amount - f.amount) < 0.005 && Math.abs(x.push - f.push) < 0.005 && Math.abs(x.dynamics - f.dynamics) < 0.005); b.textContent = (pr ? pr[0] : RACK.fmtFeel(f.amount)) + ' ▾'; };
+
+// the Feel panel: presets from Machine to Drunk, plus the three dials and take controls
+RACK.feelPop = () => {
+  const old = UI.$('#feelPop'); if (old) { old.remove(); return; }
+  const f = A.proj.feel, el = document.createElement('div'); el.id = 'feelPop'; el.className = 'pop';
+  const K = (label, key, spec) => UI.knobLabeled(label, Object.assign({ get: () => f[key], set: (v, d) => { f[key] = v; A.change('feel' + key, { quiet: !d }); RACK.feelLabel(); RACK.feelMarks(); if (d) RACK.feelPresetsOn(el); } }, spec), 'big');
+  el.innerHTML = `<div class="phead"><b>Feel</b><span class="sub">how human the timing and hits are</span><button class="btn icon" data-x aria-label="Close">✕</button></div>
+    <div class="pbody"><div class="presets">${ENG.FEEL_PRESETS.map(([n], i) => `<button class="btn" data-pre="${i}">${UI.esc(n)}</button>`).join('')}</div>
+    <div class="krow">${K('Amount', 'amount', { min: 0, max: 1, def: 0, fmt: RACK.fmtFeel })}${K('Push', 'push', { min: -1, max: 1, def: 0, bipolar: true, fmt: (v) => (Math.abs(v) < 0.02 ? 'On the beat' : v < 0 ? 'Lay back ' + Math.round(-v * 100) + '%' : 'Rush ' + Math.round(v * 100) + '%') })}${K('Dynamics', 'dynamics', { min: 0, max: 1, def: 0, fmt: (v) => (v < 0.01 ? 'Flat' : Math.round(v * 100) + '%') })}</div>
+    <div class="field"><button class="btn${f.vary ? ' on' : ''}" id="feelVary">${f.vary ? 'Varies each pass' : 'Same every pass'}</button><button class="btn" id="feelTake">New take</button><span class="sub" id="feelTakeN">Take ${f.take}</span></div>
+    <p class="note">Kicks stay tightest, snares and claps sit back or push, hats breathe most. Set a channel's own amount in its settings (0% keeps it on the grid).</p></div>`;
+  document.body.appendChild(el);
+  const r = UI.$('#feelBtn').getBoundingClientRect();
+  if (innerWidth <= 760) Object.assign(el.style, { left: '8px', right: '8px', bottom: '60px', top: 'auto' });
+  else Object.assign(el.style, { left: Math.max(8, Math.min(innerWidth - 400, r.right - 390)) + 'px', top: r.bottom + 6 + 'px' });
+  RACK.feelPresetsOn(el);
+  el.querySelector('[data-x]').onclick = () => el.remove();
+  el.querySelectorAll('[data-pre]').forEach((b) => (b.onclick = () => { Object.assign(f, ENG.FEEL_PRESETS[+b.dataset.pre][1]); A.change('feelpre', { rack: true }); el.remove(); RACK.feelPop(); }));
+  el.querySelector('#feelVary').onclick = () => { f.vary = !f.vary; A.change('feelvary'); el.remove(); RACK.feelPop(); };
+  el.querySelector('#feelTake').onclick = () => { f.take = (f.take || 1) + 1; A.change('feeltake'); el.querySelector('#feelTakeN').textContent = 'Take ' + f.take; RACK.feelMarks(); };
+};
+RACK.feelPresetsOn = (el) => { const f = A.proj.feel; el.querySelectorAll('[data-pre]').forEach((b) => { const x = ENG.FEEL_PRESETS[+b.dataset.pre][1]; b.classList.toggle('on', Math.abs(x.amount - f.amount) < 0.005 && Math.abs(x.push - f.push) < 0.005 && Math.abs(x.dynamics - f.dynamics) < 0.005); }); };
+// show each hit's timing shift as a small tick inside its step, so the feel is visible, not a mystery
+RACK.feelMarks = () => {
+  const p = A.proj, pat = M.pat(p), sd = ENG.stepDur(p.bpm);
+  UI.$$('#rackBody .crow').forEach((row) => {
+    const ch = M.chan(p, row.dataset.ch); if (!ch) return;
+    row.querySelectorAll('.st.on').forEach((b) => {
+      const ps = +b.dataset.s, fe = ENG.feel(p, ch, pat, ps, ps, sd);
+      let m = b.querySelector('.fm'); const frac = fe.dt / sd; // shift as a fraction of a step
+      if (Math.abs(frac) < 0.004) { if (m) m.remove(); return; }
+      if (!m) { m = document.createElement('span'); m.className = 'fm'; b.appendChild(m); }
+      m.style.left = (50 + frac * 100) + '%';
+    });
+  });
 };
 RACK.fmtPan = (v) => (Math.abs(v) < 0.01 ? 'C' : (v < 0 ? 'L' : 'R') + Math.round(Math.abs(v) * 100));
 
@@ -45,6 +86,7 @@ RACK.showNow = (col) => {
 
 RACK.init = () => {
   const body = UI.$('#rackBody');
+  UI.$('#feelBtn').onclick = RACK.feelPop;
   let paint = null; // { ch, on, done:Set }
   const applyStep = (btn, on) => {
     const row = btn.closest('.crow'), ch = M.chan(A.proj, row.dataset.ch), s = +btn.dataset.s, pat = M.pat(A.proj);
@@ -77,7 +119,7 @@ RACK.init = () => {
     if (!st || st === paint.last || st.closest('.crow').dataset.ch !== paint.ch) return;
     paint.last = st; applyStep(st, paint.on);
   });
-  const end = () => { if (paint) { paint = null; A.change('steps', { pl: true }); } };
+  const end = () => { if (paint) { paint = null; A.change('steps', { pl: true }); RACK.feelMarks(); } };
   body.addEventListener('pointerup', end); body.addEventListener('pointercancel', end);
   body.addEventListener('contextmenu', (e) => {
     e.preventDefault();
@@ -119,7 +161,7 @@ RACK.chanMenu = (id, x, y) => {
   const fill = (every) => () => { for (let s = 0; s < pat.len; s++) M.setCell(pat, id, s, s % every === 0 ? M.newCell(ch) : null); A.change('fill', { rack: true, pl: true }); };
   UI.menu(x, y, [
     ['Channel settings…', () => PANEL.open(id)],
-    ['Rename…', () => { const n = prompt('Channel name', ch.name); if (n) { ch.name = n.slice(0, 40); A.change('name', { rack: true }); } }],
+    ['Rename…', async () => { const n = await UI.ask('Channel name', ch.name); if (n) { ch.name = n.slice(0, 40); A.change('name', { rack: true }); } }],
     ['Clone channel', () => { const c = JSON.parse(JSON.stringify(ch)); c.id = U.uid('c'); c.name = ch.name + ' 2'; c.solo = false; p.channels.splice(i + 1, 0, c); for (const pt of p.patterns) if (pt.grid[id]) pt.grid[c.id] = JSON.parse(JSON.stringify(pt.grid[id])); A.change('clone', { rack: true }); }],
     'hr',
     ['Fill every 2 steps', fill(2)], ['Fill every 4 steps', fill(4)], ['Fill every 8 steps', fill(8)],
@@ -135,6 +177,7 @@ RACK.addMenu = (x, y) => {
   UI.menu(x, y, [
     ['Drum sound (Dark Roast kick)…', () => A.addSoundChannel('roast/kick', true)],
     ['808 bass', () => A.addSoundChannel('bass/808long', true)],
+    ['Record a sample…', () => REC.open()],
     ['Audio file…', async () => { const files = await U.pickFile('audio/*,.wav,.mp3,.ogg,.flac,.m4a', true); for (const f of files) await A.loadSampleFile(f, null); }],
     'hr',
     ...SOUND.SYNTHS.map((s, i) => ['Synth: ' + s[0], () => A.addSynthChannel(i)]),

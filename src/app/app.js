@@ -21,13 +21,27 @@ A.saveNow = () => { try { localStorage.setItem(AUTOSAVE, JSON.stringify(A.proj))
 A.save = U.debounce(A.saveNow, 400);
 // hand a file to the person: a download in browsers, Music/Esperanza's Drum Kit/ on Android (WebView has no downloads)
 A.deliver = async (blob, name) => {
+  // 1) Android app: chunked writes into Music/Esperanza's Drum Kit/ (WebView has no downloads)
   const br = window.EdkAndroid;
-  if (!br) { U.download(blob, name); return; }
-  const u8 = new Uint8Array(await blob.arrayBuffer()), id = br.begin(name);
-  if (id < 0) { UI.toast('Could not save ' + name); return; }
-  const CH = 3 * 65536;
-  for (let i = 0; i < u8.length; i += CH) { let s = ''; const part = u8.subarray(i, i + CH); for (let j = 0; j < part.length; j += 8192) s += String.fromCharCode.apply(null, part.subarray(j, j + 8192)); br.append(id, btoa(s)); }
-  const path = br.finish(id); UI.toast(path ? 'Saved to Music/Esperanza\'s Drum Kit' : 'Could not save ' + name, 3000);
+  if (br) {
+    const u8 = new Uint8Array(await blob.arrayBuffer()), id = br.begin(name);
+    if (id < 0) { UI.toast('Could not save ' + name); return; }
+    const CH = 3 * 65536;
+    for (let i = 0; i < u8.length; i += CH) { let s = ''; const part = u8.subarray(i, i + CH); for (let j = 0; j < part.length; j += 8192) s += String.fromCharCode.apply(null, part.subarray(j, j + 8192)); br.append(id, btoa(s)); }
+    const path = br.finish(id); UI.toast(path ? 'Saved to Music/Esperanza\'s Drum Kit' : 'Could not save ' + name, 3000);
+    return;
+  }
+  // 2) published Claude page: the downloads capability takes a short list of types, so audio and projects travel in a .zip
+  const dl = window.claude && window.claude.use ? await window.claude.use('downloads').catch(() => null) : null;
+  if (dl) {
+    let fname = name, data = blob;
+    if (!/\.(zip|json|txt|html|csv)$/i.test(name)) { fname = name + '.zip'; data = U.zip([{ name, data: new Uint8Array(await blob.arrayBuffer()) }]); }
+    try { await dl.save({ filename: fname, data }); UI.toast('Saved ' + fname, 2500); }
+    catch (e) { if (e && e.code !== 'declined') UI.toast('Saving is not available here: ' + (e.message || e.code)); }
+    return;
+  }
+  // 3) any browser
+  U.download(blob, name);
 };
 A.load = (proj) => {
   A.eng.stop();
@@ -91,7 +105,7 @@ A.patMenu = (x, y) => {
     'hr',
     ['New pattern', A.newPattern],
     ['Clone pattern', () => { const c = JSON.parse(JSON.stringify(cur)); c.id = U.uid('p'); c.name = cur.name + ' copy'; p.patterns.push(c); A.setPattern(c.id); }],
-    ['Rename…', () => { const n = prompt('Pattern name', cur.name); if (n) { cur.name = n.slice(0, 40); A.change('pname', { top: true, pl: true }); } }],
+    ['Rename…', async () => { const n = await UI.ask('Pattern name', cur.name); if (n) { cur.name = n.slice(0, 40); A.change('pname', { top: true, pl: true }); } }],
     ['Delete pattern', () => {
       if (p.patterns.length < 2) { UI.toast('A project keeps at least one pattern'); return; }
       p.patterns = p.patterns.filter((x) => x !== cur); p.playlist.clips = p.playlist.clips.filter((c) => c.pat !== cur.id); p.cur = p.patterns[0].id;
@@ -102,14 +116,18 @@ A.patMenu = (x, y) => {
 
 // ---------------- transport ----------------
 A.togglePlay = () => { if (A.eng.playing) A.stop(); else A.play(); };
-A.play = () => { A.eng.play(A.proj.mode === 'song' ? PL.songPos : 0); A.updateTop(); };
+A.play = () => {
+  const p = A.proj; let from = 0;
+  if (p.mode === 'song') { from = PL.songPos; const lp = p.loop; if (lp.on && (from < lp.start || from >= lp.start + lp.len)) from = lp.start; }
+  A.eng.play(from); A.updateTop();
+};
 A.stop = () => { A.eng.stop(); RACK.showNow(-1); PL.showHead(null); A.updateTop(); A.showTime(null); };
 A.setMode = (m) => { A.proj.mode = m; A.change('mode', { top: true }); if (A.eng.playing) A.play(); };
 A.setTempo = (bpm, done) => { bpm = Math.round(U.clamp(bpm, 10, 522) * 1000) / 1000; A.eng.retempo(bpm); A.proj.bpm = bpm; UI.$('#tempo span').textContent = bpm.toFixed(3); A.change('bpm', { quiet: !done }); };
 A.showTime = (pos) => {
   const el = UI.$('#time'); if (!el) return;
   if (pos === null) pos = A.proj.mode === 'song' ? PL.songPos : 0;
-  if (A.proj.mode === 'pat') pos = pos % M.pat(A.proj).len; else pos = pos % M.songLen(A.proj);
+  if (A.proj.mode === 'pat') pos = pos % M.pat(A.proj).len; else pos = ENG.songPos(A.proj, Math.floor(pos));
   const k = Math.max(0, Math.floor(pos));
   el.lastChild.textContent = `${Math.floor(k / 16) + 1}:${String(Math.floor(k / 4) % 4 + 1)}:${String(k % 4 + 1)}`;
 };
@@ -151,25 +169,52 @@ A.saveFile = () => {
   A.deliver(U.zip(files), A.fileName() + '.edk');
 };
 A.openFile = async () => {
-  const [f] = await U.pickFile('.edk,application/zip'); if (!f) return;
+  const [f] = await U.pickFile('.edk,.zip,application/zip'); if (!f) return;
   try {
-    const z = await U.unzip(f);
+    let z = await U.unzip(f);
+    if (!z['project.json']) { const inner = Object.keys(z).find((n) => /\.edk$/i.test(n)); if (inner) z = await U.unzip(z[inner]); }
     const proj = JSON.parse(new TextDecoder().decode(z['project.json']));
     for (const name in z) {
       const m = /^samples\/(.+)\.wav$/.exec(name); if (!m) continue;
       const w = U.decodeWav(z[name]); const label = z['samples/' + m[1] + '.txt'];
       if (w) { ENG.userSamples.set(m[1], { ch: w.ch, sr: w.sr, name: label ? new TextDecoder().decode(label) : m[1] }); A.storeSample(m[1]); }
     }
-    proj.name = proj.name && proj.name !== 'Untitled' ? proj.name : f.name.replace(/\.edk$/i, '');
+    proj.name = proj.name && proj.name !== 'Untitled' ? proj.name : f.name.replace(/(\.edk)?(\.zip)?$/i, '');
     A.load(proj); UI.toast('Opened ' + f.name);
   } catch (e) { UI.toast('That file could not be opened'); }
 };
-A.exportWav = async (mode) => {
-  if (mode === 'song' && !A.proj.playlist.clips.length) { UI.toast('The playlist is empty: place a pattern first, or export the pattern'); return; }
-  UI.toast('Rendering…', 1200);
-  const { buf } = await ENG.render(A.proj, { mode, sr: A.eng.sr, loops: 1, tail: 1.5 });
+// scope: 'song' | 'pat' | 'section' (with sec); fmt: 'wav' (24-bit) | 'mp3' (320 kbps)
+A.exportAudio = async (scope, fmt, sec) => {
+  const p = A.proj;
+  if (scope === 'song' && !p.playlist.clips.length) { UI.toast('The playlist is empty: place a pattern first, or export the pattern'); return; }
+  UI.toast('Rendering…', 1500);
+  const opts = { sr: A.eng.sr, tail: 1.5 };
+  if (scope === 'section') { opts.range = { start: sec.start, len: sec.len }; opts.tail = 0.5; } else opts.mode = scope;
+  const { buf } = await ENG.render(p, opts);
   const ch = [buf.getChannelData(0), buf.getChannelData(1)];
-  A.deliver(new Blob([U.encodeWav(ch, buf.sampleRate, 24)], { type: 'audio/wav' }), A.fileName() + (mode === 'pat' ? ' - ' + M.pat(A.proj).name : '') + '.wav');
+  const name = A.fileName() + (scope === 'pat' ? ' - ' + M.pat(p).name : scope === 'section' ? ' - ' + sec.name : '');
+  if (fmt === 'mp3') A.deliver(await A.encodeMp3(ch, buf.sampleRate, 320), name + '.mp3');
+  else A.deliver(new Blob([U.encodeWav(ch, buf.sampleRate, 24)], { type: 'audio/wav' }), name + '.wav');
+};
+A.exportWav = (mode) => A.exportAudio(mode, 'wav');
+// MP3 with the bundled LAME port (lamejs, LGPL); encoded in slices so the screen stays responsive
+A.encodeMp3 = async (ch, sr, kbps) => {
+  if (typeof lamejs === 'undefined') throw new Error('MP3 encoder missing');
+  const rate = [48000, 44100, 32000].includes(sr) ? sr : 44100;
+  if (rate !== sr) { // resample to a rate MP3 supports
+    const oc = new OfflineAudioContext(2, Math.ceil(ch[0].length * rate / sr), rate), b = oc.createBuffer(2, ch[0].length, sr);
+    b.copyToChannel(ch[0], 0); b.copyToChannel(ch[1], 1); const src = oc.createBufferSource(); src.buffer = b; src.connect(oc.destination); src.start();
+    const r = await oc.startRendering(); ch = [r.getChannelData(0), r.getChannelData(1)];
+  }
+  const enc = new lamejs.Mp3Encoder(2, rate, kbps), n = ch[0].length, parts = [], B = 1152;
+  const toI16 = (f, a, z) => { const o = new Int16Array(z - a); for (let i = a; i < z; i++) { const v = Math.max(-1, Math.min(1, f[i])); o[i - a] = v < 0 ? v * 32768 : v * 32767; } return o; };
+  for (let i = 0; i < n; i += B * 200) {
+    const z = Math.min(n, i + B * 200), L = toI16(ch[0], i, z), R = toI16(ch[1], i, z);
+    for (let j = 0; j < L.length; j += B) { const d = enc.encodeBuffer(L.subarray(j, j + B), R.subarray(j, j + B)); if (d.length) parts.push(new Uint8Array(d)); }
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  const tail = enc.flush(); if (tail.length) parts.push(new Uint8Array(tail));
+  return new Blob(parts, { type: 'audio/mpeg' });
 };
 A.demo = () => {
   const p = M.newProject(); p.name = 'Morning Demo'; p.bpm = 92; p.swing = 0.35;
@@ -218,7 +263,7 @@ A.buildTop = () => {
     t.addEventListener('pointermove', mv); t.addEventListener('pointerup', up);
   });
   t.addEventListener('wheel', (e) => { e.preventDefault(); A.setTempo(A.proj.bpm - Math.sign(e.deltaY) * (e.shiftKey ? 0.1 : 1), true); }, { passive: false });
-  t.addEventListener('dblclick', () => { const v = parseFloat(prompt('Tempo (BPM)', A.proj.bpm)); if (v) A.setTempo(v, true); });
+  t.addEventListener('dblclick', async () => { const v = parseFloat(await UI.ask('Tempo (BPM)', A.proj.bpm, { number: true })); if (v) A.setTempo(v, true); });
 };
 A.updateTop = () => {
   const p = A.proj, pat = M.pat(p);
@@ -231,13 +276,14 @@ A.updateTop = () => {
   A.showTime(A.eng.playing ? A.eng.pos() || 0 : null);
 };
 A.fileMenu = (x, y) => UI.menu(x, y, [
-  ['New project', () => { if (confirm('Start a new project? Unsaved changes in this one will be lost.')) A.load(M.newProject()); }],
+  ['New project', async () => { if (await UI.confirm('Start a new project?', 'Anything not saved to a file in this one will be lost.', 'Start new')) A.load(M.newProject()); }],
   ['Open…', A.openFile], ['Save as .edk', A.saveFile],
   'hr',
-  ['Export song as WAV', () => A.exportWav('song')], ['Export pattern as WAV', () => A.exportWav('pat')],
+  ['Export song as WAV', () => A.exportAudio('song', 'wav')], ['Export song as MP3', () => A.exportAudio('song', 'mp3')],
+  ['Export pattern as WAV', () => A.exportAudio('pat', 'wav')], ['Export pattern as MP3', () => A.exportAudio('pat', 'mp3')],
   'hr',
-  ['Load the demo beat', () => { if (confirm('Replace this project with the demo beat?')) A.demo(); }],
-  ['Rename project…', () => { const n = prompt('Project name', A.proj.name); if (n) { A.proj.name = n.slice(0, 60); A.change('pname'); } }],
+  ['Load the demo beat', async () => { if (await UI.confirm('Load the demo beat?', 'It replaces the project you have open.', 'Load demo')) A.demo(); }],
+  ['Rename project…', async () => { const n = await UI.ask('Project name', A.proj.name); if (n) { A.proj.name = n.slice(0, 60); A.change('pname'); } }],
   [document.body.classList.contains('flat') ? 'Turn TV texture on' : 'Turn TV texture off', () => { document.body.classList.toggle('flat'); try { localStorage.setItem('edk.flat', document.body.classList.contains('flat') ? '1' : ''); } catch (e) { /* */ } }],
   ['About', A.about],
 ]);
@@ -249,7 +295,7 @@ A.syncViewBtns = () => { [['vBrowser', 'browser'], ['vRack', 'rack'], ['vPl', 'p
 A.view = (v) => { document.body.classList.remove('v-sounds', 'v-rack', 'v-playlist'); document.body.classList.add('v-' + v); UI.$$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.v === v)); if (v === 'playlist') PL.render(); };
 
 A.keys = (e) => {
-  if (e.target.closest('input, select, textarea')) return;
+  if (e.target.closest('input, select, textarea') || UI.$('.dlg-back')) return;
   const mod = e.ctrlKey || e.metaKey;
   if (e.code === 'Space') { e.preventDefault(); A.togglePlay(); }
   else if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) A.redo(); else A.undo(); }
@@ -290,4 +336,14 @@ A.boot = async () => {
   UI.$('#splashGo').onclick = go;
   if (/[?&]nosplash/.test(location.search)) go();
 };
-addEventListener('DOMContentLoaded', () => { A.boot().catch((e) => { console.error(e); const g = UI.$('#splashGo'); if (g) g.textContent = 'Could not start audio: ' + e.message; }); });
+A.bootFail = (e) => {
+  console.error(e);
+  const sp = UI.$('#splash'); if (!sp) return;
+  const fileOpen = location.protocol === 'file:' || location.origin === 'null';
+  sp.querySelector('p').textContent = fileOpen
+    ? 'This browser will not start the audio engine from a file opened directly. Open the app from its web link, run the "Start" launcher in the web folder, or use Chrome or Edge.'
+    : 'The audio engine could not start in this browser (' + (e && e.message ? e.message : e) + '). Try a current Chrome, Edge, Firefox or Safari.';
+  const g = UI.$('#splashGo'); if (g) { g.textContent = 'Audio unavailable'; g.disabled = true; }
+};
+const startApp = () => A.boot().catch(A.bootFail);
+if (document.readyState === 'loading') addEventListener('DOMContentLoaded', startApp); else startApp();

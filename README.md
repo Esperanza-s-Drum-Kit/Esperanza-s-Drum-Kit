@@ -10,7 +10,29 @@ Linux builds to follow from the same Electron shell DAWters uses.
 **Free software.** Copyright (C) 2026 Josh Wilk. GNU General Public License, version 3 or (at your option) any later
 version — see [LICENSE](LICENSE). No price, no tiers, no sign-up, no tracking: the app makes no network requests.
 
-## 0.1 — Foundations (this release)
+## 0.2 — Feel, sections, loops, MP3, your own samples (this release)
+
+- **Feel (humanize):** one dial from *Machine* (exactly on the grid) to *Drunk*, with presets in between
+  (Studio tight, In the pocket, Laid back, Live drummer, Rushing, Loose). **Push** lays the groove back or rushes it;
+  **Dynamics** shapes velocity by where each hit falls in the bar. Each instrument plays its own part of the pocket:
+  kicks stay tightest, snares and claps sit back or push, hats breathe most. Timing drifts smoothly the way a
+  player's hands do, rather than as independent random jitter, and the same settings give the same performance
+  every pass; *New take* gives a different one, and *Vary each pass* makes every loop slightly different.
+  Every channel has its own Feel amount (0% keeps it on the grid). Each hit's shift shows as a tick inside its step.
+  Measured at Laid back: a clap lands 9–16 ms behind the beat while the kick stays within ±5 ms.
+- **Song sections:** a lane over the playlist for Intro, Verse, Pre-chorus, Chorus, Hook, Bridge, Breakdown, Drop,
+  Interlude and Outro (or any name). Move and resize them, click one to jump there, and use its menu to loop it,
+  play from it, duplicate it with its clips (everything after moves right), remove it, or export it as WAV or MP3.
+- **Loops:** drag across the ruler to set a loop region; the Loop button switches it on and off. Patterns loop in
+  pattern mode, the song (or its loop region) in song mode. Sampler channels can loop their sample.
+- **MP3 export** (320 kbps, bundled LAME encoder) alongside 24-bit WAV, for the song, the pattern or a section.
+- **Your own samples:** record from the microphone (silence trimmed, level set, named, straight into the rack; you
+  can play the beat while you record), or load audio files. Sample tools on every sampler: reverse, normalize,
+  loop, and *fit to 1/2/4/8 bars* at the project tempo.
+- **Opens everywhere:** in-page dialogs instead of browser pop-ups; Safari needs the page served from a web
+  address, so the web build now ships with a local launcher (`web/`), and a clear message explains it if audio can't start.
+
+## 0.1 — Foundations
 
 - **Channel rack:** one row per channel with mute (right-click or Ctrl-click to solo), pan, volume and name;
   1–4 bar step grid, click to add, drag to paint, right-click to remove, steps shaded by beat. Swing.
@@ -31,7 +53,8 @@ version — see [LICENSE](LICENSE). No price, no tiers, no sign-up, no tracking:
 ## Build
 
 ```
-python3 build.py              # -> dist/edk.html (single self-contained file; open it in Chrome, Edge or Firefox)
+python3 build.py              # -> dist/edk.html (single file), dist/Esperanzas-Drum-Kit-web.zip (page + local launcher),
+                              #    dist/edk-page.html (for publishing as a Claude page)
 sh android/build-apk.sh       # -> android/build/Esperanzas-Drum-Kit.apk (offline: aapt, javac, dx, zipalign, apksigner)
 ```
 
@@ -45,6 +68,8 @@ Without them the script signs with a throwaway development key that won't instal
 
 ```
 python3 tools/verify.py       # timing, swing, song arrangement, mute, tuning, file round trip, undo, live transport
+python3 tools/verify02.py     # loop region, sections, section export, MP3 round trip, Feel in a render, sample tools, mic recording
+python3 tools/feel_check.py   # what every Feel preset does to timing and velocity, per instrument
 python3 tools/ui_check.py /tmp   # real clicks: steps, paint, playlist clip, song play, panel, browser, undo
 python3 tools/smoke.py /tmp      # console errors + desktop and phone screenshots
 ```
@@ -61,13 +86,16 @@ the live transport runs. **Not yet run on a physical Android device.**
 - `src/app/model.js` — project model (time unit: one 16th-note step), undo history
 - `src/app/sounds.js` — factory kits, 808s, synth presets, start-up rendering of the kit samples
 - `src/app/engine.js` — audio graph, look-ahead step scheduler, offline render
-- `src/app/rack.js`, `playlist.js`, `browser.js` (browser + channel settings), `ui.js` (knobs, menus), `app.js` (controller)
+- `src/app/rack.js` (rack + Feel panel), `playlist.js` (clips, sections, loop), `browser.js` (browser + channel settings),
+  `record.js` (microphone recording + sample tools), `ui.js` (knobs, menus, dialogs), `app.js` (controller, files, export)
+- `src/vendor/lame.min.js` — lamejs 1.2.1 MP3 encoder (LGPL-3.0, `src/vendor/lamejs-LICENSE.txt`)
+- `web/` — local launcher (Python 3) for running the web build at `http://localhost:8748`
 - `src/style.css` — "Percolator" design system; fonts Alfa Slab One, Barlow Condensed, DM Mono (SIL OFL 1.1, `src/fonts/`)
 - `android/` — WebView shell, manifest, icons, build script
 
 ## Roadmap
 
-0.2 sampler channel depth and browser · 0.3 piano roll · 0.4 mixer (inserts, effect slots, sends, sidechain) and
+0.3 Mac/Windows/Linux packages, layer channels, piano roll · 0.4 mixer (inserts, effect slots, sends, sidechain) and
 compressed export · 0.5 instruments · 0.6 automation clips · 0.7 audio recording, sample editor, slicer ·
 0.8 chord tools · 0.9 MIDI and controller mapping · 1.0 MVP on all five platforms. After 1.0: preset player,
 performance mode, more synths and effects; a native VST3/AU host for the desktop builds.

@@ -16,19 +16,20 @@
   <header id="top"></header>
   <main id="main">
     <aside id="browser" aria-label="Sound browser">
-      <div class="panelhead">Sounds <input id="browserFind" type="search" placeholder="Find…" aria-label="Find sounds"></div>
+      <div class="panelhead">Sounds <input id="browserFind" type="search" placeholder="Find…" aria-label="Find sounds"><button class="btn icon" id="recOpen" title="Record a sample from the microphone" aria-label="Record a sample"><svg viewBox="0 0 16 16"><rect x="5.5" y="1.5" width="5" height="9" rx="2.5" fill="currentColor"/><path d="M3 7.5a5 5 0 0010 0M8 12.5v2.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button><button class="btn icon" id="fileOpen" title="Load audio files" aria-label="Load audio files">+</button></div>
       <div class="blist" id="browserList"></div>
     </aside>
     <section id="work">
       <div class="win" id="rackWin">
         <div class="title"><h2>Channel rack</h2><span class="sub" id="rackPat"></span><div class="grow"></div>
           <div class="kwrap" style="flex-direction:row;gap:6px;min-width:0"><label>Swing</label><span id="swingK"></span></div>
+          <div class="kwrap" id="feelWrap" style="flex-direction:row;gap:6px;min-width:0"><label>Feel</label><span id="feelK"></span><button class="btn" id="feelBtn" title="Humanize: timing and dynamics">Machine ▾</button></div>
           <select id="patLen" aria-label="Pattern length"><option value="16">1 bar</option><option value="32">2 bars</option><option value="48">3 bars</option><option value="64">4 bars</option></select>
         </div>
         <div class="body" id="rackBody"></div>
       </div>
       <div class="win" id="plWin">
-        <div class="title"><h2>Playlist</h2><span class="sub hide-phone">Arrangement</span><div class="grow"></div>
+        <div class="title"><h2>Playlist</h2><span class="sub hide-phone">Arrangement</span><button class="btn" id="secBtn" title="Add a song section">+ Section</button><button class="btn" id="loopBtn" title="Loop the region set on the ruler (drag the ruler to set it)">Loop</button><div class="grow"></div>
           <label class="sub" for="plZoom">Zoom</label><input id="plZoom" type="range" min="2" max="16" step="1" value="6" style="width:90px">
         </div>
         <div class="body" id="plBody"></div>
@@ -39,6 +40,7 @@
 </div>
 <div id="panel" class="hidden" role="dialog" aria-label="Channel settings"></div>
 <div id="splash"><div class="card"><div>Esperanza's</div><small>DRUM KIT</small></div><p>The best part of breaking down.</p><button class="btn go" id="splashGo" disabled>Brewing the kits…</button></div>
+<script>/*LAME*/</script>
 <script>/*JS*/</script>
 </body>
 </html>

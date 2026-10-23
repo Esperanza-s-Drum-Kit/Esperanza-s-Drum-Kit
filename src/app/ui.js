@@ -92,3 +92,19 @@ UI.longPress = (el, fn) => {
   el.addEventListener('pointerup', cancel); el.addEventListener('pointercancel', cancel);
 };
 UI.noteName = (n) => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][((n % 12) + 12) % 12] + Math.floor(n / 12);
+
+// ---- in-page dialogs (pop-up prompt/confirm are blocked in some hosts) ----
+UI.dialog = (title, opts) => new Promise((res) => {
+  opts = opts || {};
+  const d = document.createElement('div'); d.className = 'dlg-back';
+  d.innerHTML = `<form class="dlg" role="dialog" aria-label="${UI.esc(title)}"><h3>${UI.esc(title)}</h3>${opts.text ? `<p>${UI.esc(opts.text)}</p>` : ''}${opts.input !== undefined ? `<input id="dlgIn" value="${UI.esc(opts.input)}" ${opts.number ? 'inputmode="decimal"' : ''} autocomplete="off">` : ''}<div class="dlg-btns"><button type="button" class="btn" data-x="0">Cancel</button><button type="submit" class="btn on">${UI.esc(opts.ok || 'OK')}</button></div></form>`;
+  document.body.appendChild(d);
+  const inp = d.querySelector('#dlgIn'); if (inp) { inp.focus(); inp.select(); } else d.querySelector('[type=submit]').focus();
+  const done = (v) => { d.remove(); res(v); };
+  d.querySelector('form').onsubmit = (e) => { e.preventDefault(); done(inp ? inp.value : true); };
+  d.querySelector('[data-x]').onclick = () => done(opts.input !== undefined ? null : false);
+  d.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(opts.input !== undefined ? null : false); } });
+  d.addEventListener('pointerdown', (e) => { if (e.target === d) done(opts.input !== undefined ? null : false); });
+});
+UI.ask = (title, value, opts) => UI.dialog(title, Object.assign({ input: value === undefined ? '' : String(value) }, opts));
+UI.confirm = (title, text, ok) => UI.dialog(title, { text, ok });

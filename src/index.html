@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#9e1b22">
+<title>Esperanza's Drum Kit</title>
+<link rel="icon" href="ICON_DATAURL">
+<style>/*CSS*/</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <radialGradient id="knobCap" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#6e5644"/><stop offset="0.55" stop-color="#3b2a1e"/><stop offset="1" stop-color="#1d120c"/></radialGradient>
+</defs></svg>
+<div id="app">
+  <header id="top"></header>
+  <main id="main">
+    <aside id="browser" aria-label="Sound browser">
+      <div class="panelhead">Sounds <input id="browserFind" type="search" placeholder="Find…" aria-label="Find sounds"></div>
+      <div class="blist" id="browserList"></div>
+    </aside>
+    <section id="work">
+      <div class="win" id="rackWin">
+        <div class="title"><h2>Channel rack</h2><span class="sub" id="rackPat"></span><div class="grow"></div>
+          <div class="kwrap" style="flex-direction:row;gap:6px;min-width:0"><label>Swing</label><span id="swingK"></span></div>
+          <select id="patLen" aria-label="Pattern length"><option value="16">1 bar</option><option value="32">2 bars</option><option value="48">3 bars</option><option value="64">4 bars</option></select>
+        </div>
+        <div class="body" id="rackBody"></div>
+      </div>
+      <div class="win" id="plWin">
+        <div class="title"><h2>Playlist</h2><span class="sub hide-phone">Arrangement</span><div class="grow"></div>
+          <label class="sub" for="plZoom">Zoom</label><input id="plZoom" type="range" min="2" max="16" step="1" value="6" style="width:90px">
+        </div>
+        <div class="body" id="plBody"></div>
+      </div>
+    </section>
+  </main>
+  <nav id="tabs" aria-label="Views"><button data-v="sounds">Sounds</button><button data-v="rack">Rack</button><button data-v="playlist">Playlist</button></nav>
+</div>
+<div id="panel" class="hidden" role="dialog" aria-label="Channel settings"></div>
+<div id="splash"><div class="card"><div>Esperanza's</div><small>DRUM KIT</small></div><p>The best part of breaking down.</p><button class="btn go" id="splashGo" disabled>Brewing the kits…</button></div>
+<script>/*JS*/</script>
+</body>
+</html>

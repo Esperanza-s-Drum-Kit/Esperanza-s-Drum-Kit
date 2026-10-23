@@ -10,7 +10,12 @@ Linux builds to follow from the same Electron shell DAWters uses.
 **Free software.** Copyright (C) 2026 Josh Wilk. GNU General Public License, version 3 or (at your option) any later
 version — see [LICENSE](LICENSE). No price, no tiers, no sign-up, no tracking: the app makes no network requests.
 
-## 0.2 — Feel, sections, loops, MP3, your own samples (this release)
+## 0.2.1 — synth fixes (this release)
+
+- Turning a channel's **Home note** now moves the key of every step it already plays, in every pattern (before, it only set the note for new steps).
+- Clicking a **synth** in the Sounds browser plays a short preview, as drums already did, and every knob in a channel's settings plays the sound when you let go, so each change is heard.
+
+## 0.2 — Feel, sections, loops, MP3, your own samples
 
 - **Feel (humanize):** one dial from *Machine* (exactly on the grid) to *Drunk*, with presets in between
   (Studio tight, In the pocket, Laid back, Live drummer, Rushing, Loose). **Push** lays the groove back or rushes it;
@@ -68,7 +73,8 @@ Without them the script signs with a throwaway development key that won't instal
 
 ```
 python3 tools/verify.py       # timing, swing, song arrangement, mute, tuning, file round trip, undo, live transport
-python3 tools/verify02.py     # loop region, sections, section export, MP3 round trip, Feel in a render, sample tools, mic recording
+python3 tools/verify02.py     # loop region, sections, section export, MP3 round trip, Feel in a render, sample tools, mic recording,
+                              # home-note transposing, synth preview
 python3 tools/feel_check.py   # what every Feel preset does to timing and velocity, per instrument
 python3 tools/ui_check.py /tmp   # real clicks: steps, paint, playlist clip, song play, panel, browser, undo
 python3 tools/smoke.py /tmp      # console errors + desktop and phone screenshots

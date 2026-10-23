@@ -36,7 +36,7 @@ BROWSER.init = () => {
     const it = e.target.closest('.bitem'); if (!it) return;
     const add = e.target.closest('[data-act="add"]');
     if (it.dataset.sound) { if (add) A.addSoundChannel(it.dataset.sound, true); else A.eng.previewSound(it.dataset.sound); }
-    else if (it.dataset.synth !== undefined && add) A.addSynthChannel(+it.dataset.synth);
+    else if (it.dataset.synth !== undefined) { if (add) A.addSynthChannel(+it.dataset.synth); else A.eng.previewSynth(+it.dataset.synth); }
   });
   el.addEventListener('dblclick', (e) => {
     const it = e.target.closest('.bitem'); if (!it || e.target.closest('.add')) return;
@@ -49,13 +49,15 @@ BROWSER.init = () => {
 };
 
 // ---------------- channel settings panel ----------------
-const PANEL = { id: null };
+const PANEL = { id: null, last: 0 };
+// play the channel once after a knob is let go (not on every wheel tick)
+PANEL.hear = (ch) => { const now = Date.now(); if (now - PANEL.last < 250) return; PANEL.last = now; setTimeout(() => A.eng.preview(ch.id, ch.note || 60, M.DEF_VEL), 20); };
 PANEL.close = () => { UI.$('#panel').classList.add('hidden'); PANEL.id = null; };
 PANEL.open = (id) => {
   const ch = M.chan(A.proj, id); if (!ch) return;
   PANEL.id = id; A.proj.sel = id;
   const el = UI.$('#panel'); el.classList.remove('hidden');
-  const set = (k, key, done) => (v, d) => { ch.p[k] = v; A.change(key || ('p:' + k + id), { quiet: !d }); };
+  const set = (k, key, done) => (v, d) => { ch.p[k] = v; A.change(key || ('p:' + k + id), { quiet: !d }); if (d) PANEL.hear(ch); };
   const K = (label, k, spec) => UI.knobLabeled(label, Object.assign({ get: () => ch.p[k], set: set(k) }, spec));
   const sec = (title, inner) => `<h3>${title}</h3><div class="krow">${inner}</div>`;
   const s = (v) => (v < 1 ? Math.round(v * 1000) + ' ms' : v.toFixed(2) + ' s');
@@ -65,7 +67,7 @@ PANEL.open = (id) => {
   inner += `<div class="krow">${UI.knobLabeled('Volume', { min: 0, max: 1.25, def: 0.78, get: () => ch.vol, set: (v, d) => { ch.vol = v; A.change('vol' + id, { quiet: !d, rack: d }); }, fmt: (v) => Math.round(v * 100) + '%' })}
     ${UI.knobLabeled('Pan', { min: -1, max: 1, def: 0, bipolar: true, get: () => ch.pan, set: (v, d) => { ch.pan = Math.abs(v) < 0.02 ? 0 : v; A.change('pan' + id, { quiet: !d, rack: d }); }, fmt: RACK.fmtPan })}
     ${UI.knobLabeled('Feel', { min: 0, max: 2, def: 1, get: () => (ch.feel === undefined ? 1 : ch.feel), set: (v, d) => { ch.feel = Math.abs(v - 1) < 0.03 ? undefined : v; A.change('feelch' + id, { quiet: !d }); if (d) RACK.feelMarks(); }, fmt: (v) => (v < 0.01 ? 'On grid' : Math.round(v * 100) + '%') })}
-    ${UI.knobLabeled('Home note', { min: 24, max: 96, step: 1, def: 60, get: () => ch.note || 60, set: (v, d) => { ch.note = Math.round(v); A.change('note' + id, { quiet: !d }); if (d) A.eng.preview(id, ch.note, M.DEF_VEL); }, fmt: UI.noteName })}</div>`;
+    ${UI.knobLabeled('Home note', { min: 24, max: 96, step: 1, def: 60, get: () => ch.note || 60, set: (v, d) => { M.setHomeNote(A.proj, ch, Math.round(v)); A.change('note' + id, { quiet: !d, rack: d }); if (d) A.eng.preview(id, ch.note, M.DEF_VEL); }, fmt: UI.noteName })}</div>`;
   if (ch.type === 'sampler') {
     const opts = SOUND.catalog().map((x) => `<option value="${x.id}"${x.id === ch.sound && !ch.sample ? ' selected' : ''}>${UI.esc(x.group + ' · ' + x.name)}</option>`).join('')
       + Array.from(ENG.userSamples.entries()).map(([sid, x]) => `<option value="${sid}"${sid === ch.sample ? ' selected' : ''}>${UI.esc('Your samples · ' + x.name)}</option>`).join('');
@@ -73,7 +75,7 @@ PANEL.open = (id) => {
     inner += `<h3>Sample</h3><div class="tools"><button class="btn" data-tool="rev">Reverse</button><button class="btn" data-tool="norm">Normalize</button><button class="btn${ch.p.loop ? ' on' : ''}" data-tool="loop">${ch.p.loop ? 'Looping' : 'Loop off'}</button><span class="sub">Fit to</span><button class="btn" data-fit="1">1 bar</button><button class="btn" data-fit="2">2</button><button class="btn" data-fit="4">4</button><button class="btn" data-fit="8">8</button></div>`;
     const base = SOUND.samplerParams(ch.sample ? null : ch.sound).tune; // 808s carry a small built-in correction
     inner += sec('Pitch', UI.knobLabeled('Pitch', { min: -2400 + base, max: 2400 + base, def: base, bipolar: true, get: () => ch.p.tune,
-      set: (v, d) => { ch.p.tune = Math.round((v - base) / 100) * 100 + base; A.change('p:tune' + id, { quiet: !d }); }, fmt: (v) => { const st = Math.round((v - base) / 100); return (st > 0 ? '+' : '') + st + ' st'; } })
+      set: (v, d) => { ch.p.tune = Math.round((v - base) / 100) * 100 + base; A.change('p:tune' + id, { quiet: !d }); if (d) PANEL.hear(ch); }, fmt: (v) => { const st = Math.round((v - base) / 100); return (st > 0 ? '+' : '') + st + ' st'; } })
       + `<div class="kwrap"><label>Play</label><button class="btn${ch.p.oneshot ? ' on' : ''}" id="pOne" style="height:26px">${ch.p.oneshot ? 'One-shot' : 'Note length'}</button></div>`);
     inner += sec('Envelope', K('Attack', 'a', { min: 0.001, max: 2, def: 0.001, log: true, fmt: s }) + K('Decay', 'd', { min: 0.01, max: 4, def: 0.3, log: true, fmt: s }) + K('Sustain', 's', { min: 0, max: 1, def: 1, fmt: (v) => Math.round(v * 100) + '%' }) + K('Release', 'r', { min: 0.005, max: 4, def: 0.05, log: true, fmt: s }));
     inner += sec('Tone', K('Cutoff', 'cut', { min: 80, max: 20000, def: 20000, log: true, fmt: hz }) + K('Reso', 'res', { min: 0, max: 1, def: 0, fmt: (v) => Math.round(v * 100) + '%' }) + K('Velocity', 'vsens', { min: 0, max: 1, def: 0.6, fmt: (v) => Math.round(v * 100) + '%' }) + K('Level', 'vol', { min: -24, max: 12, def: 0, fmt: (v) => (v > 0 ? '+' : '') + v.toFixed(1) + ' dB' }));

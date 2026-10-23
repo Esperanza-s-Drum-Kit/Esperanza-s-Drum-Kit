@@ -4,7 +4,7 @@
 // Time unit everywhere is the STEP: one 16th note. A 4/4 bar is 16 steps.
 'use strict';
 const M = {};
-M.VERSION = '0.2.0';
+M.VERSION = '0.2.1';
 M.FORMAT = 1;
 M.STEPS_PER_BAR = 16;
 M.COLORS = ['#C4382A', '#D99A2B', '#7A8B3E', '#5E8FA8', '#B5653A', '#8C4A6B', '#3F7F73', '#C9B27C', '#6A5ACD', '#9C7B4E', '#D0614C', '#4E6E8E'];
@@ -53,6 +53,11 @@ M.cell = (pat, chId, s) => { const r = pat.grid[chId]; return r ? r[s] || null :
 M.setCell = (pat, chId, s, v) => { const r = M.row(pat, chId); while (r.length <= s) r.push(null); r[s] = v; };
 // a new step plays the channel's home note: the sample's own pitch for drums, a sensible register for basses and synths
 M.newCell = (ch) => ({ v: M.DEF_VEL, n: (ch && ch.note) || M.DEF_NOTE, g: 1 });
+// changing a channel's home note moves the key of everything it already plays, in every pattern
+M.setHomeNote = (proj, ch, note) => {
+  const old = ch.note || 60, d = note - old; ch.note = note; if (!d) return;
+  for (const pat of proj.patterns) for (const c of pat.grid[ch.id] || []) if (c) c.n = Math.max(0, Math.min(127, c.n + d));
+};
 M.homeNote = (type, sound, synthIdx) => {
   if (type === 'synth') return (SOUND.SYNTHS[synthIdx || 0] || [])[2] || 60;
   const b = SOUND.BASSES.find((x) => x.id === sound); return b ? 36 : 60;

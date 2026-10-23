@@ -36,6 +36,15 @@ JS = r"""async () => {
     R.reverse = { sameLen: rv.length === src.length, mirrored: Math.abs(rv[0] - src[src.length - 1]) < 1e-7 && Math.abs(rv[rv.length - 1] - src[0]) < 1e-7, nowUser: !!ch.sample };
     SMP.fit(ch, 1); const s = ENG.sampleFor(ch), rate = Math.pow(2, ch.p.tune / 1200);
     R.fit = { playedSec: +(s.ch[0].length / s.sr / rate).toFixed(3), barSec: +(16 * ENG.stepDur(A.proj.bpm)).toFixed(3) }; }
+  // home note moves the key of steps already placed: A4 (440 Hz) up an octave renders at 880 Hz
+  { const p = M.newProject(); const i = SOUND.SYNTHS.findIndex((x) => x[0] === 'Organ'); const ch = M.newChannel(p, { type: 'synth', p: JSON.parse(JSON.stringify(SOUND.SYNTHS[i][1])), note: 69 });
+    Object.assign(ch.p, { sub: 0, o2oct: 0, mix: 0, lpitch: 0 }); p.channels = [ch]; M.setCell(p.patterns[0], ch.id, 0, { v: 1, n: 69, g: 8 });
+    M.setHomeNote(p, ch, 81);
+    const { buf } = await ENG.render(p, { mode: 'pat', sr, tail: 0 }); const d = buf.getChannelData(0);
+    let zc = 0, a = Math.round(0.1 * sr), b = Math.round(0.4 * sr); for (let k = a; k < b; k++) if (d[k - 1] <= 0 && d[k] > 0) zc++;
+    R.homeNote = { stepNote: M.cell(p.patterns[0], ch.id, 0).n, hz: +(zc / ((b - a) / sr)).toFixed(1), want: 880 }; }
+  // clicking a synth in the browser plays it (a preview voice reaches the master)
+  { A.eng.previewSynth(1); await new Promise((r) => setTimeout(r, 300)); const pk = A.eng.peak(); R.synthPreview = { peak: +Math.max(...pk).toFixed(3) }; }
   return R; }"""
 REC = r"""async () => {
   REC.open(); await REC.start(); await new Promise((r) => setTimeout(r, 1500)); REC.stop();
@@ -57,5 +66,5 @@ with sync_playwright() as p:
           and r['sections']['clips'] == ['0:0', '0:32', '1:64'] and abs(r['sectionRender']['seconds'] - r['sectionRender']['want']) < 0.001
           and r['mp3']['frameSync'] and abs(r['mp3']['secOut'] - r['mp3']['secIn']) < 0.1 and abs(r['mp3']['peakOut'] - r['mp3']['peakIn']) < 1.5
           and all(5 <= x <= 22 for x in r['feelRender']['lateMs']) and r['reverse']['mirrored'] and r['reverse']['nowUser']
-          and abs(r['fit']['playedSec'] - r['fit']['barSec']) < 0.01 and r['record']['channelAdded'] and r['record']['hasSample'] and r['record']['seconds'] > 0.5 and not errs)
+          and abs(r['fit']['playedSec'] - r['fit']['barSec']) < 0.01 and r['record']['channelAdded'] and r['record']['hasSample'] and r['record']['seconds'] > 0.5 and r['homeNote']['stepNote'] == 81 and abs(r['homeNote']['hz'] - 880) < 6 and r['synthPreview']['peak'] > 0.01 and not errs)
     print('PASS' if ok else 'FAIL'); b.close(); sys.exit(0 if ok else 1)

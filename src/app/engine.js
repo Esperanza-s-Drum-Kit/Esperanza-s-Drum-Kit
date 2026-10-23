@@ -221,6 +221,16 @@ class Engine {
     this.resume(); const f = Math.round((this.ctx.currentTime + 0.01) * this.sr);
     this.graph.post(chId, { t: 'ev', ev: [[f, 1, note, vel], [f + Math.round(this.sr * 0.3), 0, note, 0]] });
   }
+  // a synth preset on its own voice: a short phrase (root, fifth, octave) so the sound and its envelope are heard
+  previewSynth(i) {
+    this.resume();
+    const pr = SOUND.SYNTHS[i]; if (!pr) return;
+    if (this.pv) { try { this.pv.disconnect(); } catch (e) { /* */ } }
+    const n = pr[2] || 60, sr = this.sr, f = Math.round((this.ctx.currentTime + 0.01) * sr), st = Math.round(sr * 0.22);
+    const ev = [[f, 1, n, 0.85], [f + st, 0, n, 0], [f + st, 1, n + 7, 0.75], [f + 2 * st, 0, n + 7, 0], [f + 2 * st, 1, n + 12, 0.8], [f + 4 * st, 0, n + 12, 0]];
+    this.pv = new AudioWorkletNode(this.ctx, 'ds-inst', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2], processorOptions: { type: 'synth', p: pr[1], events: ev } });
+    const g = this.ctx.createGain(); g.gain.value = 0.9; this.pv.connect(g); g.connect(this.graph.mIn);
+  }
   previewSound(id) { // a factory or user sample on its own voice, straight to the master
     this.resume();
     const smp = SOUND.buffers.get(id) || ENG.userSamples.get(id); if (!smp) return;

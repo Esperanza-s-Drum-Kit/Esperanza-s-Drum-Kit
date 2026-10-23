@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<title>Esperanza's Drum Kit</title>
+<meta name="description" content="Esperanza's Drum Kit is a free, open-source beat studio: channel rack, playlist, song sections, a Feel dial for human timing, MP3 and WAV export. For Android and the browser. No sign-up, no tracking.">
+<meta name="theme-color" content="#090806">
+<meta property="og:title" content="Esperanza's Drum Kit: the best part of breaking down">
+<meta property="og:description" content="A free, open-source beat studio from the makers of DAWters and Son. No tiers, no sign-up, no tracking.">
+<meta property="og:image" content="img/card.webp">
+<link rel="preload" href="fonts/yesteryear-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* fonts are served from this site: no third-party requests */
+@font-face{font-family:'Yesteryear';font-weight:400;font-display:swap;src:url(fonts/yesteryear-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Oswald';font-weight:400;font-display:swap;src:url(fonts/oswald-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Oswald';font-weight:500;font-display:swap;src:url(fonts/oswald-latin-500-normal.woff2) format('woff2')}
+@font-face{font-family:'Oswald';font-weight:600;font-display:swap;src:url(fonts/oswald-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Courier Prime';font-weight:400;font-display:swap;src:url(fonts/courier-prime-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Courier Prime';font-weight:400;font-style:italic;font-display:swap;src:url(fonts/courier-prime-latin-400-italic.woff2) format('woff2')}
+@font-face{font-family:'Courier Prime';font-weight:700;font-display:swap;src:url(fonts/courier-prime-latin-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Alfa Slab One';font-weight:400;font-display:swap;src:url(fonts/alfa-slab-one-latin-400-normal.woff2) format('woff2')}
+</style>
+<style>
+/* Layout: the late show of the DAWters and Son broadcast. Black station band with a red pinstripe, coffee-dark paper,
+   script title cards, cream ink outlines, one sponsor-red accent, and the can-red wordmark plate as EDK's own mark. */
+:root {
+  --ink: #EDE5D3; --paper: #110D0A; --card: #1B1510; --card-2: #261E17; --muted: #A2977F; --rule: rgba(237,229,211,.18);
+  --red: #E2452F; --red-ink: #FBF8F1; --band: #090806; --band-ink: #F4EEE1; --can: #9E1B22; --can-2: #6F1217; --gold: #F0C46A; --dial: #F1E6C4;
+  --script: 'Yesteryear', 'Brush Script MT', cursive;
+  --slab: 'Alfa Slab One', Rockwell, 'Roboto Slab', serif;
+  --head: 'Oswald', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --mono: 'Courier Prime', 'Courier New', ui-monospace, monospace;
+  --wrap: 1180px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 17px/1.55 var(--mono); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--band); }
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 400; }
+p { margin: 0; max-width: 64ch; }
+:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+/* ---------- station band ---------- */
+.band { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; background: var(--band); color: var(--band-ink); box-shadow: 0 3px 0 var(--red); }
+.band .wrap { display: flex; align-items: center; gap: 18px; padding-block: 9px; }
+.plate { display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 4px 7px; background: var(--can); border-radius: 7px; box-shadow: inset 0 0 0 2px var(--can-2), inset 0 0 0 3px rgba(237,229,211,.3); text-decoration: none; color: var(--ink); }
+.plate img { width: 34px; height: 34px; }
+.plate span { display: block; line-height: 1; }
+.plate b { display: block; font: 400 28px/1 var(--script); margin-bottom: 3px; }
+.plate small { display: block; font: 400 10px/1 var(--slab); letter-spacing: 3.6px; color: var(--gold); padding-left: 3px; }
+.nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.nav a { font: 500 14px var(--head); letter-spacing: 1.4px; text-transform: uppercase; text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+.nav a:hover { background: var(--band-ink); color: var(--band); }
+.nav a.cta { background: var(--red); color: var(--red-ink); }
+@media (max-width: 760px) { .nav a:not(.cta) { display: none; } }
+/* ---------- hero ---------- */
+.hero { padding-block: 54px 40px; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 44px; align-items: center; }
+.eyebrow { font: 500 13px var(--head); letter-spacing: 4px; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 12px; }
+.eyebrow::after { content: ''; flex: 1; border-top: 3px double var(--rule); }
+.hero h1 { margin-block: 14px 4px; line-height: .9; }
+.hero h1 b { display: block; font: 400 clamp(70px, 9vw, 118px)/.95 var(--script); font-weight: 400; }
+.hero h1 small { display: block; font: 400 clamp(22px, 2.6vw, 32px)/1 var(--slab); letter-spacing: .32em; color: var(--gold); margin-top: 6px; }
+.motto { font: italic 400 20px var(--mono); color: var(--muted); margin-bottom: 18px; }
+.hero .sub { font: 600 clamp(22px, 2.6vw, 30px)/1.15 var(--head); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 14px; }
+.hero .sub em { font-style: normal; color: var(--red); }
+.hero p.lead { font-size: 18px; margin-bottom: 26px; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border: 2px solid var(--ink); border-radius: 999px; font: 500 16px var(--head); letter-spacing: 1.4px; text-transform: uppercase; text-decoration: none; background: transparent; color: var(--ink); cursor: pointer; }
+.btn:hover { background: var(--card-2); }
+.btn.red { background: var(--red); border-color: var(--red); color: var(--red-ink); }
+.btn.red:hover { filter: brightness(1.08); }
+.small-note { font: italic 400 14px var(--mono); color: var(--muted); margin-top: 12px; }
+.tv { position: relative; background: var(--band); padding: 12px; border-radius: 22px; box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--ink), 0 28px 60px rgba(0,0,0,.5); }
+.tv img { border-radius: 12px; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
+.burst { position: absolute; top: -26px; right: -18px; width: 132px; height: 132px; display: grid; place-items: center; text-align: center; background: var(--red); color: var(--red-ink); font: 600 17px/1.05 var(--head); text-transform: uppercase; letter-spacing: 1px;
+  clip-path: polygon(50% 0, 59% 13%, 75% 7%, 76% 24%, 93% 25%, 87% 41%, 100% 50%, 87% 59%, 93% 75%, 76% 76%, 75% 93%, 59% 87%, 50% 100%, 41% 87%, 25% 93%, 24% 76%, 7% 75%, 13% 59%, 0 50%, 13% 41%, 7% 25%, 24% 24%, 25% 7%, 41% 13%); }
+.burst b { font-size: 36px; display: block; }
+@media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } .burst { width: 104px; height: 104px; font-size: 14px; right: -6px; } .burst b { font-size: 28px; } }
+/* ---------- ribbon ---------- */
+.ribbon { background: var(--red); color: var(--red-ink); }
+.ribbon .wrap { display: flex; flex-wrap: wrap; gap: 8px 30px; justify-content: center; padding-block: 12px; font: 500 15px var(--head); letter-spacing: 2.5px; text-transform: uppercase; }
+.ribbon span::before { content: '★ '; }
+/* ---------- sections ---------- */
+section.s { padding-block: 64px; scroll-margin-top: 64px; }
+section.s + section.s { border-top: 3px double var(--rule); }
+.title-card { display: flex; flex-direction: column; gap: 8px; margin-bottom: 30px; }
+.title-card h2 { font: 400 clamp(44px, 5.6vw, 66px)/1 var(--script); }
+.title-card p { color: var(--muted); }
+/* feel dial */
+.feel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 36px; align-items: center; }
+.scale { border: 3px solid var(--ink); border-radius: 18px; background: var(--card); box-shadow: 0 0 0 5px var(--card), 0 0 0 7px var(--ink); padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.scale .row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 70px; gap: 12px; align-items: center; font-size: 15px; }
+.scale .row b { font: 500 15px var(--head); letter-spacing: 1px; text-transform: uppercase; }
+.scale .row i { font-style: normal; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.track { position: relative; height: 22px; border-radius: 4px; background: var(--card-2); }
+.track::before { content: ''; position: absolute; left: 50%; top: 2px; bottom: 2px; border-left: 2px dashed var(--rule); }
+.track span { position: absolute; top: 4px; width: 4px; height: 14px; border-radius: 2px; background: var(--gold); margin-left: -2px; }
+.track span.k { background: var(--ink); }
+.track span.s { background: var(--red); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font: 500 12px var(--head); letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+@media (max-width: 860px) { .feel { grid-template-columns: 1fr; } .scale .row { grid-template-columns: 92px minmax(0, 1fr) 56px; } }
+/* features */
+.feat { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.f { border: 2px solid var(--ink); border-radius: 14px; background: var(--card); padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.f h3 { font: 600 21px/1.15 var(--head); letter-spacing: .5px; text-transform: uppercase; }
+.f .k { font: 500 12px var(--head); letter-spacing: 2.5px; text-transform: uppercase; color: var(--red); }
+.f p { font-size: 15px; }
+@media (max-width: 960px) { .feat { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .feat { grid-template-columns: 1fr; } }
+/* screens */
+.tabs { display: inline-flex; flex-wrap: wrap; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
+.tabs button { border: 0; background: var(--card); color: var(--ink); padding: 9px 16px; font: 500 14px var(--head); letter-spacing: 1.2px; text-transform: uppercase; cursor: pointer; }
+.tabs button + button { border-left: 1px solid var(--ink); }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.screen { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 26px; align-items: start; }
+.screen .tv img { aspect-ratio: auto; }
+.screen.phone { grid-template-columns: 300px minmax(0, 1fr); }
+.screen.phone .tv { max-width: 300px; }
+.cap h3 { font: 600 26px/1.1 var(--head); text-transform: uppercase; margin-bottom: 10px; }
+.cap p { font-size: 16px; }
+@media (max-width: 900px) { .screen, .screen.phone { grid-template-columns: 1fr; } .screen.phone .tv { margin-inline: auto; } }
+/* the suite */
+.suite { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.app { border: 2px solid var(--ink); border-radius: 16px; background: var(--card); padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.app.here { box-shadow: 0 0 0 4px var(--card), 0 0 0 6px var(--red); }
+.app h3 { font: 400 40px/1 var(--script); }
+.app .k { font: 500 12px var(--head); letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted); }
+.app .btn { align-self: flex-start; margin-top: auto; }
+@media (max-width: 760px) { .suite { grid-template-columns: 1fr; } }
+/* downloads */
+.dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.d { border: 2px solid var(--ink); border-radius: 14px; background: var(--card); padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.d.soon { border-style: dashed; color: var(--muted); }
+.d h3 { font: 600 22px var(--head); text-transform: uppercase; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.d h3 small { font: 400 13px var(--mono); color: var(--muted); text-transform: none; }
+.d .file { font: 400 13px var(--mono); color: var(--muted); }
+.d ol { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.d .btn { justify-content: center; margin-top: auto; }
+.src { font: italic 400 13px var(--mono); color: var(--muted); margin-top: 10px; }
+/* faq */
+.faq { display: grid; gap: 10px; max-width: 900px; }
+details { border: 2px solid var(--ink); border-radius: 12px; background: var(--card); padding: 0 18px; }
+summary { cursor: pointer; padding: 14px 0; font: 600 18px var(--head); text-transform: uppercase; letter-spacing: .4px; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: '+'; color: var(--red); font-size: 24px; line-height: 1; }
+details[open] summary::after { content: '–'; }
+details p { padding-bottom: 16px; font-size: 15px; }
+/* footer */
+footer { background: var(--band); color: var(--band-ink); }
+footer .wrap { padding-block: 34px; display: flex; flex-wrap: wrap; gap: 18px 40px; justify-content: space-between; align-items: center; font-size: 14px; }
+footer p { color: #B6AC98; max-width: 64ch; }
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="wrap">
+    <a class="plate" href="#top"><img src="img/icon.svg" alt="" width="34" height="34"><span><b>Esperanza's</b><small>DRUM KIT</small></span></a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#feel">Feel</a><a href="#features">Features</a><a href="#screens">Screens</a><a href="#suite">The suite</a><a href="#faq">FAQ</a><a class="cta" href="#get">Get it free</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">A DAWters and Son studio</div>
+        <h1><b>Esperanza's</b><small>DRUM KIT</small></h1>
+        <p class="motto">The best part of breaking down.</p>
+        <div class="sub">Make beats all night. <em>On the house.</em></div>
+        <p class="lead">A pattern-based beat studio: a channel rack of steps, a playlist to arrange your song in sections, drum kits, 808s and synths, and a Feel dial that makes a programmed beat play like a person. On Android and in your browser.</p>
+        <div class="btns"><a class="btn red" href="app/">Open it in your browser</a><a class="btn" href="#get">Download for Android</a></div>
+        <p class="small-note">No sign-up. No tracking. No subscription. No ads.</p>
+      </div>
+      <div class="tv">
+        <img src="img/studio.webp" width="1600" height="1000" alt="The studio: the channel rack with a beat programmed in its steps, and the playlist below with Intro, Verse, Chorus and Outro sections and the chorus looping.">
+        <div class="burst"><span><b>$0</b>every<br>feature</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="ribbon"><div class="wrap"><span>Channel rack &amp; playlist</span><span>Human feel</span><span>Song sections</span><span>Record your own sounds</span><span>Open source</span></div></div>
+
+  <section class="s" id="feel">
+    <div class="wrap">
+      <div class="title-card"><div class="eyebrow">The Feel dial</div><h2>From the grid to the pocket.</h2><p>Most humanize buttons shake every hit at random, and the beat just sounds sloppy. Feel plays it like a drummer instead.</p></div>
+      <div class="feel">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <p>Turn one dial from <b>Machine</b>, dead on the grid, to <b>Drunk</b>. Presets in between: Studio tight, In the pocket, Laid back, Live drummer, Rushing and Loose.</p>
+          <p>Every instrument plays its own part of the pocket. Kicks stay tightest. Snares and claps sit back or push. Hats breathe the most. Timing drifts smoothly from hit to hit, the way a player’s hands do, and <b>Dynamics</b> leans on the downbeats.</p>
+          <p>The same setting plays the same take every loop, so the groove stays put. Press <b>New take</b> for another performance, or let every pass vary. Each channel has its own amount, so you can keep the kick robotic while the hats swing.</p>
+        </div>
+        <div class="scale" role="img" aria-label="Where hits land at three Feel settings: on the grid at Machine; a laid-back snare about 12 milliseconds late at Laid back; a wider spread at Drunk.">
+          <div class="legend"><span style="--c:var(--ink)">Kick</span><span style="--c:var(--red)">Snare / clap</span><span style="--c:var(--gold)">Hats</span><span>Dashed line = the beat</span></div>
+          <div class="row"><b>Machine</b><div class="track"><span class="k" style="left:50%"></span><span class="s" style="left:50%"></span><span style="left:50%"></span></div><i>0 ms</i></div>
+          <div class="row"><b>In the pocket</b><div class="track"><span class="k" style="left:50.4%"></span><span class="s" style="left:52.4%"></span><span style="left:51.6%"></span><span style="left:47.5%"></span></div><i>±5 ms</i></div>
+          <div class="row"><b>Laid back</b><div class="track"><span class="k" style="left:52.5%"></span><span class="s" style="left:65.4%"></span><span style="left:58.8%"></span><span style="left:55%"></span></div><i>+12 ms</i></div>
+          <div class="row"><b>Live drummer</b><div class="track"><span class="k" style="left:48.1%"></span><span class="s" style="left:53.8%"></span><span style="left:42.5%"></span><span style="left:58.8%"></span></div><i>±9 ms</i></div>
+          <div class="row"><b>Drunk</b><div class="track"><span class="k" style="left:53.8%"></span><span class="s" style="left:65%"></span><span style="left:27.5%"></span><span style="left:75%"></span></div><i>±22 ms</i></div>
+          <p class="src" style="margin:0">Measured from the app at 90 BPM. The bar spans 40 ms early to 40 ms late; the figure is the snare’s typical offset or the widest hat spread.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="features">
+    <div class="wrap">
+      <div class="title-card"><div class="eyebrow">What’s in the kit</div><h2>Steps, songs, sounds.</h2><p>If you’ve made beats in a pattern-based studio before, you’ll know your way around in a minute.</p></div>
+      <div class="feat">
+        <div class="f"><div class="k">Program</div><h3>A channel rack of steps</h3><p>One row per sound, 1 to 4 bars of steps. Click to add a hit, drag to paint a roll, right-click to clear. Swing, mute, solo, pan and volume on every row.</p></div>
+        <div class="f"><div class="k">Arrange</div><h3>Patterns on a playlist</h3><p>Make as many patterns as you want and lay them out on twelve tracks. Stretch a clip and it repeats its pattern. Play one pattern or the whole song.</p></div>
+        <div class="f"><div class="k">Structure</div><h3>Intro, verse, chorus, bridge, outro</h3><p>Mark your song’s sections over the playlist. Loop any section while you work on it, duplicate it with its clips, or export just that part.</p></div>
+        <div class="f"><div class="k">Sounds</div><h3>Five kits, 808s, 14 synths</h3><p>Dark Roast, Espresso, Cold Brew, Drip Machine and Night Shift kits, three 808s that play in key, and synths from sub bass to pads, keys and bells.</p></div>
+        <div class="f"><div class="k">Make your own</div><h3>Record a sample</h3><p>Hit record and clap, sing or bang a pot lid. Silence is trimmed and the level set, then it drops into the rack. Reverse it, loop it, or fit it to your tempo.</p></div>
+        <div class="f"><div class="k">Finish</div><h3>MP3 and WAV, saved projects</h3><p>Export the song, one pattern or one section as MP3 or 24-bit WAV. Save the whole project, your own samples included, as one .edk file.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="screens">
+    <div class="wrap">
+      <div class="title-card"><div class="eyebrow">Real screens</div><h2>Have a look around.</h2><p>Every picture here is the app itself, not a mockup.</p></div>
+      <div class="tabs" role="tablist" aria-label="Screens" id="tabs"></div>
+      <div id="screen"></div>
+    </div>
+  </section>
+
+  <section class="s" id="suite">
+    <div class="wrap">
+      <div class="title-card"><div class="eyebrow">The suite</div><h2>Two studios, one family.</h2><p>Esperanza’s Drum Kit shares its sound engine, its look and its promise with DAWters and Son. Make the beat here; record vocals over it there.</p></div>
+      <div class="suite">
+        <div class="app here"><div class="k">Beats · patterns · arranging</div><h3>Esperanza’s Drum Kit</h3><p>The step-sequencing beat studio. Channel rack, playlist, sections, Feel, and your own samples. Android and the browser; Mac, Windows and Linux next.</p><a class="btn red" href="app/">Open it now</a></div>
+        <div class="app"><div class="k">Recording · mixing · mastering</div><h3>DAWters &amp; Son</h3><p>The multitrack recording studio. Unlimited tracks, a console with a knob for everything, 24 effects, mastering and a tuner. On every platform.</p><a class="btn" href="https://dawters-and-son.github.io/dawters-and-son/" rel="noopener">Visit DAWters &amp; Son</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="get">
+    <div class="wrap">
+      <div class="title-card"><div class="eyebrow" id="ver">Version 0.2</div><h2>Pick your machine.</h2><p>Every version is the same studio with the same project files.</p></div>
+      <div class="dl" id="dl"></div>
+      <p class="src">The Android app isn’t in the Play Store yet, so your phone will ask you to allow the install. The steps on the card show how.</p>
+    </div>
+  </section>
+
+  <section class="s" id="faq">
+    <div class="wrap">
+      <div class="title-card"><div class="eyebrow">Questions</div><h2>Asked and answered.</h2></div>
+      <div class="faq">
+        <details><summary>Is it really free?</summary><p>Yes. No paid tiers, no ads, no account, no trial and no data collection. The source code is public under the GNU GPL, so anyone can read it, change it and share it.</p></details>
+        <details><summary>Does it track me?</summary><p>No. The app has no analytics and never sends anything over the internet. Your beats, samples and settings stay on your device.</p></details>
+        <details><summary>Can I sell beats I make with it?</summary><p>Yes. What you make is yours. Every factory drum sound is synthesised by the app itself, so there are no sample licences to worry about either.</p></details>
+        <details><summary>Will it open in Safari or on an iPhone?</summary><p>Yes, from this site: use the “Open it in your browser” button. Safari won’t start the audio engine from a file you open directly, so if you download the web version, run its Start launcher instead.</p></details>
+        <details><summary>Does it load VST or AU plugins?</summary><p>Not yet. Plugin hosting is planned for the desktop versions. Phones and browsers can’t load outside plugins, so everything built in works everywhere.</p></details>
+        <details><summary>How is it related to DAWters and Son?</summary><p>It’s the beat-making half of the same suite. Both share the sound engine and the look, and both are free and open source.</p></details>
+        <details><summary>How do I report a bug?</summary><p>Open an issue on the project’s code page with what you did, what you expected and what happened, plus your device and the version from File › About.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="plate" href="#top"><img src="img/icon.svg" alt="" width="34" height="34"><span><b>Esperanza's</b><small>DRUM KIT</small></span></a>
+    <p>Free software under the GNU GPL v3 or later. This site sets no cookies and runs no analytics; it is hosted on GitHub Pages, whose servers keep standard access logs. MP3 encoding by lamejs (LGPL). Fonts: Yesteryear, Oswald, Courier Prime, Alfa Slab One (SIL OFL). <a id="srcLink" href="#">Source code</a>.</p>
+  </div>
+</footer>
+
+<script>
+// Where the files live: change these lines if the project moves.
+const REPO = 'https://github.com/Esperanza-s-Drum-Kit/Esperanza-s-Drum-Kit';
+const RELEASES = REPO + '/releases';
+const V = '0.2.0';
+document.getElementById('srcLink').href = REPO;
+document.getElementById('ver').textContent = 'Version ' + V;
+const DL = [
+  { os: 'Android', req: 'Android 7+, phone or tablet', href: RELEASES + '/latest', label: 'Get the Android app', size: '0.3 MB', steps: ['Open the latest release on your phone and tap the .apk.', 'Allow “install unknown apps” for your browser when asked.'] },
+  { os: 'Browser', req: 'Chrome, Edge, Firefox or Safari', href: 'app/', label: 'Open in your browser', size: '0.5 MB', steps: ['Nothing to install. Allow the microphone if you record a sample.', 'Your project autosaves in this browser; use File › Save to keep a copy.'] },
+  { os: 'Offline', req: 'Any computer with Python 3', href: RELEASES + '/latest', label: 'Get the web zip', size: '0.3 MB', steps: ['Unzip it and double-click Start (Mac or Windows).', 'It opens at localhost in your browser and works without internet.'] },
+  { os: 'Mac · Windows · Linux', req: 'Desktop apps', soon: true, size: 'next', steps: ['Installers arrive in version 0.3.', 'Until then the browser version runs on every desktop.'] },
+];
+const dl = document.getElementById('dl');
+DL.forEach((d) => {
+  const card = document.createElement('div'); card.className = 'd' + (d.soon ? ' soon' : '');
+  card.innerHTML = '<h3>' + d.os + '<small>' + d.size + '</small></h3><div class="file">' + d.req + '</div><ol>' + d.steps.map((s) => '<li>' + s.replace(/</g, '&lt;') + '</li>').join('') + '</ol>';
+  if (!d.soon) { const a = document.createElement('a'); a.className = 'btn red'; a.href = d.href; a.rel = 'noopener'; a.textContent = d.label; card.append(a); }
+  dl.append(card);
+});
+const SCREENS = [
+  { k: 'studio', t: 'Studio', img: 'studio.webp', h: 'Rack on top, song below', p: 'Program steps in the channel rack and arrange patterns in the playlist under named sections. Drag across the ruler to loop a part while you work on it.' },
+  { k: 'feel', t: 'Feel', img: 'feel.webp', h: 'Human timing, on your terms', p: 'Pick a preset or set Amount, Push and Dynamics yourself. The little ticks inside each step show exactly where every hit moved.' },
+  { k: 'sections', t: 'Sections', img: 'sections.webp', h: 'Build the song in parts', p: 'Each section can loop, play from its start, duplicate itself with its clips, or export on its own as MP3 or WAV.' },
+  { k: 'channel', t: 'Sounds', img: 'channel.webp', h: 'Shape every sound', p: 'Pitch, envelope, filter and level for every sampler, plus reverse, normalize, loop and fit-to-tempo for loops.' },
+  { k: 'record', t: 'Record', img: 'record.webp', h: 'Your sounds, in a tap', p: 'Record from the microphone, with the beat playing if you like. The take is trimmed, levelled and named, then added to the rack.' },
+  { k: 'phone', t: 'Phone', img: 'phone-rack.webp', phone: true, h: 'The whole studio on your phone', p: 'Rack, playlist and sounds are one tap apart on the bottom bar. Steps are sized for thumbs.' },
+];
+const tabs = document.getElementById('tabs'), screen = document.getElementById('screen');
+const show = (s) => {
+  tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', b.dataset.k === s.k ? 'true' : 'false'));
+  screen.className = 'screen' + (s.phone ? ' phone' : '');
+  screen.innerHTML = '<div class="tv"><img src="img/' + s.img + '" alt="' + s.h + '" width="' + (s.phone ? 700 : 1600) + '" height="' + (s.phone ? 1515 : 1000) + '"></div><div class="cap"><h3>' + s.h + '</h3><p>' + s.p + '</p></div>';
+};
+SCREENS.forEach((s) => { const b = document.createElement('button'); b.setAttribute('role', 'tab'); b.dataset.k = s.k; b.textContent = s.t; b.addEventListener('click', () => show(s)); tabs.append(b); });
+show(SCREENS[0]);
+SCREENS.slice(1).forEach((s) => { const i = new Image(); i.src = 'img/' + s.img; });
+</script>
+</body>
+</html>

@@ -90,7 +90,7 @@ the live transport runs. **Not yet run on a physical Android device.**
   `record.js` (microphone recording + sample tools), `ui.js` (knobs, menus, dialogs), `app.js` (controller, files, export)
 - `src/vendor/lame.min.js` — lamejs 1.2.1 MP3 encoder (LGPL-3.0, `src/vendor/lamejs-LICENSE.txt`)
 - `web/` — local launcher (Python 3) for running the web build at `http://localhost:8748`
-- `src/style.css` — "Percolator" design system; fonts Alfa Slab One, Barlow Condensed, DM Mono (SIL OFL 1.1, `src/fonts/`)
+- `src/style.css` — "Percolator" design system, the late-show sibling of DAWters and Son's "On the Air" (shared type: Yesteryear, Oswald, Courier Prime; plus Alfa Slab One for the wordmark; SIL OFL 1.1, `src/fonts/`)
 - `android/` — WebView shell, manifest, icons, build script
 
 ## Roadmap

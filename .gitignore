@@ -5,3 +5,5 @@ android/tools/*.keystore
 *.keystore
 node_modules/
 __pycache__/
+_site/
+out/

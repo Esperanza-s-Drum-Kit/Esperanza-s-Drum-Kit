@@ -1,0 +1,63 @@
+# Build Esperanza's Drum Kit and publish a GitHub release.
+# Runs when a version tag (v0.2.0, v0.3.0, ...) is pushed, or by hand from the Actions tab
+# (Run workflow, then type the tag): a hand-started run builds main and creates the tag there.
+#
+# The release always carries the web build (page + local launcher) and the source.
+# The Android APK is added only when two repository secrets exist (Settings > Secrets and variables > Actions):
+#   EDK_KEYSTORE_B64  the release keystore, base64-encoded
+#   EDK_KS_PASS       its password
+# Without them, attach a locally built, release-signed APK to the release by hand.
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to build and publish, e.g. v0.2.0'
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the version
+        run: |
+          V=$(sed -n "s/^M.VERSION = '\(.*\)';/\1/p" src/app/model.js)
+          [ "v$V" = "$TAG" ] || { echo "::error::src/app/model.js says $V but the tag is $TAG"; exit 1; }
+          echo "V=$V" >> "$GITHUB_ENV"
+      - name: Build the web app
+        run: |
+          python3 build.py
+          mkdir -p out
+          cp dist/Esperanzas-Drum-Kit-web.zip "out/Esperanzas-Drum-Kit-$V-web.zip"
+          cp dist/edk.html "out/Esperanzas-Drum-Kit-$V.html"
+          git archive --format=zip --prefix=esperanzas-drum-kit/ -o "out/esperanzas-drum-kit-$V-source.zip" HEAD
+      - name: Android (only with the release key)
+        env:
+          KS_B64: ${{ secrets.EDK_KEYSTORE_B64 }}
+          EDK_KS_PASS: ${{ secrets.EDK_KS_PASS }}
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$EDK_KS_PASS" ]; then
+            echo "::warning::No EDK_KEYSTORE_B64 / EDK_KS_PASS secrets: the APK is left out; attach it by hand."
+            exit 0
+          fi
+          sudo apt-get update && sudo apt-get install -y aapt apksigner zipalign dalvik-exchange libandroid-23-java openjdk-21-jdk-headless
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/edk.keystore"
+          EDK_KEYSTORE="$RUNNER_TEMP/edk.keystore" sh android/build-apk.sh
+          cp android/build/Esperanzas-Drum-Kit.apk "out/Esperanzas-Drum-Kit-$V.apk"
+      - name: Checksums
+        run: cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" out/* --target "$GITHUB_SHA" --title "Esperanza's Drum Kit $V" \
+            --notes "Free and open source (GPL-3.0-or-later). Open **Esperanzas-Drum-Kit-$V-web.zip** and double-click Start, or use the web app on the project website. Android: install the .apk on Android 7 or newer." \
+            || gh release upload "$TAG" out/* --clobber

@@ -153,10 +153,10 @@ A.drawMeter = () => {
   for (let i = 0; i < 2; i++) {
     A.meterHold[i] = Math.max(pk[i], A.meterHold[i] * 0.92);
     const db = 20 * Math.log10(A.meterHold[i] + 1e-9), n = U.clamp((db + 48) / 48, 0, 1);
-    const y = 5 + i * 11, ww = (w - 8) * n;
-    g.fillStyle = '#2a1a10'; g.fillRect(4, y, w - 8, 8);
-    const grd = g.createLinearGradient(4, 0, w - 4, 0); grd.addColorStop(0, '#7a8b3e'); grd.addColorStop(0.75, '#d99a2b'); grd.addColorStop(1, '#c4382a');
-    g.fillStyle = grd; g.fillRect(4, y, ww, 8);
+    const y = 5 + i * 11, ww = (w - 8) * n, red = (w - 8) * (42 / 48);
+    g.fillStyle = 'rgba(26,22,17,0.12)'; g.fillRect(4, y, w - 8, 8);
+    g.fillStyle = '#1a1611'; g.fillRect(4, y, Math.min(ww, red), 8);
+    if (ww > red) { g.fillStyle = '#c8231b'; g.fillRect(4 + red, y, ww - red, 8); }
   }
 };
 
@@ -232,7 +232,7 @@ A.demo = () => {
 // ---------------- top bar ----------------
 A.buildTop = () => {
   UI.$('#top').innerHTML = `
-    <div class="brand">${UI.ICONS.cup}<div class="wordmark">Esperanza's<small>DRUM KIT</small></div></div>
+    <div class="brand">${UI.ICONS.cup}<div class="wordmark"><b>Esperanza's</b><small>DRUM KIT</small></div></div>
     <div class="motto">${UI.esc(A.MOTTO)}</div>
     <div class="grp"><button class="btn" id="fileBtn">File</button><button class="btn icon hide-phone" id="undoBtn" title="Undo (Ctrl+Z)">${UI.ICONS.undo}</button><button class="btn icon hide-phone" id="redoBtn" title="Redo (Ctrl+Y)">${UI.ICONS.redo}</button></div>
     <div class="sep hide-phone"></div>
@@ -287,7 +287,7 @@ A.fileMenu = (x, y) => UI.menu(x, y, [
   [document.body.classList.contains('flat') ? 'Turn TV texture on' : 'Turn TV texture off', () => { document.body.classList.toggle('flat'); try { localStorage.setItem('edk.flat', document.body.classList.contains('flat') ? '1' : ''); } catch (e) { /* */ } }],
   ['About', A.about],
 ]);
-A.about = () => UI.menu(innerWidth / 2 - 150, 120, [[`Esperanza's Drum Kit ${M.VERSION} · free software (GPL-3.0-or-later) · no tracking, no network`, () => {}], ['Fonts: Alfa Slab One, Barlow Condensed, DM Mono (SIL OFL 1.1)', () => {}]]);
+A.about = () => UI.menu(innerWidth / 2 - 150, 120, [[`Esperanza's Drum Kit ${M.VERSION} · free software (GPL-3.0-or-later) · no tracking, no network`, () => {}], ['A DAWters and Son studio · fonts: Yesteryear, Oswald, Courier Prime, Alfa Slab One (SIL OFL 1.1)', () => {}]]);
 
 // desktop: show/hide windows; phone: one view at a time from the bottom tabs
 A.toggleWin = (w) => { if (innerWidth <= 760) { A.view(w === 'browser' ? 'sounds' : w); return; } document.body.classList.toggle('hide-' + w); A.syncViewBtns(); };

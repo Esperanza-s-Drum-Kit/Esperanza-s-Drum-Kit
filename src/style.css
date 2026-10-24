@@ -286,3 +286,6 @@ input[type=range] { accent-color: var(--red); }
   body.hide-browser #browser, body.hide-rack #rackWin, body.hide-playlist #plWin { display: none; }
   body.hide-playlist #rackWin { max-height: none; flex: 1; }
 }
+
+/* inside DAWters (a Beat track): DAWters does the recording */
+html.suite #recBtn { display: none; }

@@ -7,6 +7,7 @@ const ENG = {};
 ENG._url = null;
 // blob: URLs are refused for worklets on some origins (file:// pages, some WebViews): fall back to a data: URL
 ENG.addWorklet = async (ctx) => {
+  if (ENG.HOST) return ENG.HOST.addModule(ctx, 'ds-core', WORKLET_SRC); // inside DAWters: the same processors, loaded once per context
   if (ENG._url) return ctx.audioWorklet.addModule(ENG._url);
   const blob = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'application/javascript' }));
   try { await ctx.audioWorklet.addModule(blob); ENG._url = blob; }
@@ -90,10 +91,10 @@ ENG.slicesAt = (proj, k, mode) => {
 };
 
 // Note events for steps [k0, k1): Map channelId -> [[frame, on/off, note, vel], ...]
-ENG.events = (proj, mode, k0, k1, stepTime, sr) => {
-  const out = new Map(), sd = ENG.stepDur(proj.bpm);
+ENG.events = (proj, mode, k0, k1, stepTime, sr, out, slicer) => {
+  out = out || new Map(); const sd = ENG.stepDur(proj.bpm);
   for (let k = k0; k < k1; k++) {
-    const slices = ENG.slicesAt(proj, k, mode);
+    const slices = slicer ? slicer(k) : ENG.slicesAt(proj, k, mode);
     if (!slices.length) continue;
     const t = stepTime(k) + ENG.swingOff(proj, k);
     for (const { pat, ps } of slices) {
@@ -117,7 +118,7 @@ const WNODE = (ctx, name, outs, po) => new AudioWorkletNode(ctx, name, {
 // ---------------- graph: channels -> faders -> master strip -> out ----------------
 class Graph {
   // settings that must hold from the first frame of an offline render are passed at creation, not by message
-  constructor(ctx, live, events, proj) {
+  constructor(ctx, live, events, proj, dest) {
     this.ctx = ctx; this.live = live; this.events = events || null; this.ch = new Map();
     this.mIn = ctx.createGain();
     this.mChan = WNODE(ctx, 'ds-channel', 1, { kind: 'master', meter: false, p: (proj || { master: M.defMaster() }).master.ch });
@@ -129,7 +130,7 @@ class Graph {
       const sp = ctx.createChannelSplitter(2); this.mVol.connect(sp); sp.connect(this.anL, 0); sp.connect(this.anR, 1);
       this.mVol.connect(this.an);
     }
-    this.mVol.connect(ctx.destination);
+    this.mVol.connect(dest || (ENG.HOST && live ? ENG.HOST.output : ctx.destination));
   }
   sync(proj) {
     const seen = new Set(), anySolo = proj.channels.some((c) => c.solo);
@@ -171,7 +172,7 @@ class Engine {
   constructor() { this.ctx = null; this.graph = null; this.playing = false; this.timer = null; this.onPos = null; }
   async init() {
     const AC = window.AudioContext || window.webkitAudioContext;
-    this.ctx = new AC({ latencyHint: 'interactive' });
+    this.ctx = ENG.HOST ? ENG.HOST.ctx : new AC({ latencyHint: 'interactive' });
     this.sr = this.ctx.sampleRate;
     await ENG.addWorklet(this.ctx);
     this.graph = new Graph(this.ctx, true);
@@ -267,4 +268,32 @@ ENG.render = async (proj, opts) => {
   const g = new Graph(ctx, false, ev, proj); g.mSig = JSON.stringify(proj.master.ch); g.sync(proj);
   const buf = await ctx.startRendering();
   return { buf, steps, sr, events: ev };
+};
+
+// ---------------- inside DAWters and Son (plugin mode) ----------------
+// A host places clips on its own timeline in seconds: { src: 'song' | patternId, start, len, off }.
+// Steps follow the host's tempo; swing and Feel are ours. Times come back as frames of the host's context.
+ENG.clipSlicer = (proj, c) => {
+  if (c.src === 'song') { const L = M.songLen(proj); return (k) => ENG.slicesAt(proj, ((k % L) + L) % L, 'raw'); }
+  const pat = M.pat(proj, c.src); if (!pat) return () => [];
+  return (k) => [{ pat, ps: ((k % pat.len) + pat.len) % pat.len }];
+};
+// notes for host song time [a, b), heard at host context time ca + (t - a); clip-relative steps keep swing on the right 16ths
+ENG.hostEvents = (proj, clips, a, b, ca, sr, out) => {
+  out = out || new Map(); const sd = ENG.stepDur(proj.bpm);
+  for (const c of clips) {
+    if (c.mute || c.start >= b || c.start + c.len <= a) continue;
+    const s = Math.max(a, c.start), e = Math.min(b, c.start + c.len), base = c.start - (c.off || 0);
+    const k0 = Math.ceil((s - base) / sd - 1e-9), k1 = Math.ceil((e - base) / sd - 1e-9);
+    if (k1 <= k0) continue;
+    ENG.events(proj, 'raw', k0, k1, (k) => ca + base + k * sd - a, sr, out, ENG.clipSlicer(proj, c));
+  }
+  // nothing may ring past a clip's end: trim note-offs to it
+  return out;
+};
+ENG.renderHost = async (proj, octx, dest, clips, s, e) => {
+  await ENG.addWorklet(octx);
+  const ev = ENG.hostEvents(proj, clips, s, e, 0, octx.sampleRate);
+  const g = new Graph(octx, false, ev, proj, dest); g.mSig = JSON.stringify(proj.master.ch); g.sync(proj);
+  return g;
 };

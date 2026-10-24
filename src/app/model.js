@@ -4,7 +4,7 @@
 // Time unit everywhere is the STEP: one 16th note. A 4/4 bar is 16 steps.
 'use strict';
 const M = {};
-M.VERSION = '0.2.1';
+M.VERSION = '0.3.0';
 M.FORMAT = 1;
 M.STEPS_PER_BAR = 16;
 M.COLORS = ['#C4382A', '#D99A2B', '#7A8B3E', '#5E8FA8', '#B5653A', '#8C4A6B', '#3F7F73', '#C9B27C', '#6A5ACD', '#9C7B4E', '#D0614C', '#4E6E8E'];

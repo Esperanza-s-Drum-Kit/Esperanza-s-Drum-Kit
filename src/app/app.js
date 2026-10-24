@@ -4,6 +4,10 @@
 'use strict';
 const A = { proj: null, eng: null, hist: new M.History(), MOTTO: 'The best part of breaking down.' };
 const AUTOSAVE = 'edk.autosave.v1';
+// Inside DAWters and Son as a Beat track: the host gives us its audio context, our output and its tempo,
+// keeps our project in its song (no autosave here) and schedules our patterns from its own timeline.
+const HOST = window.SUITE_HOST || null;
+if (HOST) { ENG.HOST = HOST; document.documentElement.classList.add('suite'); }
 
 // every edit ends here: sound follows the model, history records it, the touched views redraw
 A.change = (key, o) => {
@@ -17,7 +21,7 @@ A.change = (key, o) => {
   if (o.top) A.updateTop();
   if (o.panel && PANEL.id) PANEL.open(PANEL.id);
 };
-A.saveNow = () => { try { localStorage.setItem(AUTOSAVE, JSON.stringify(A.proj)); } catch (e) { /* storage full or blocked */ } };
+A.saveNow = () => { if (HOST) { if (HOST.changed) HOST.changed(); return; } try { localStorage.setItem(AUTOSAVE, JSON.stringify(A.proj)); } catch (e) { /* storage full or blocked */ } };
 A.save = U.debounce(A.saveNow, 400);
 // hand a file to the person: a download in browsers, Music/Esperanza's Drum Kit/ on Android (WebView has no downloads)
 A.deliver = async (blob, name) => {
@@ -87,7 +91,7 @@ A.loadSampleFile = async (file, target) => {
     BROWSER.render();
   } catch (e) { UI.toast('Could not read ' + file.name); }
 };
-A.storeSample = (id) => { const s = ENG.userSamples.get(id); if (s) U.idb.put('buffers', id, { ch: s.ch, sr: s.sr, name: s.name }).catch(() => {}); };
+A.storeSample = (id) => { if (HOST) return; const s = ENG.userSamples.get(id); if (s) U.idb.put('buffers', id, { ch: s.ch, sr: s.sr, name: s.name }).catch(() => {}); };
 A.restoreSamples = async (proj) => {
   for (const ch of proj.channels) if (ch.sample && !ENG.userSamples.has(ch.sample)) {
     try { const s = await U.idb.get('buffers', ch.sample); if (s) ENG.userSamples.set(ch.sample, s); } catch (e) { /* missing */ }
@@ -123,7 +127,7 @@ A.play = () => {
 };
 A.stop = () => { A.eng.stop(); RACK.showNow(-1); PL.showHead(null); A.updateTop(); A.showTime(null); };
 A.setMode = (m) => { A.proj.mode = m; A.change('mode', { top: true }); if (A.eng.playing) A.play(); };
-A.setTempo = (bpm, done) => { bpm = Math.round(U.clamp(bpm, 10, 522) * 1000) / 1000; A.eng.retempo(bpm); A.proj.bpm = bpm; UI.$('#tempo span').textContent = bpm.toFixed(3); A.change('bpm', { quiet: !done }); };
+A.setTempo = (bpm, done) => { bpm = Math.round(U.clamp(bpm, 10, 522) * 1000) / 1000; A.eng.retempo(bpm); A.proj.bpm = bpm; UI.$('#tempo span').textContent = bpm.toFixed(3); A.change('bpm', { quiet: !done }); if (HOST && done && HOST.tempo) HOST.tempo(bpm); };
 A.showTime = (pos) => {
   const el = UI.$('#time'); if (!el) return;
   if (pos === null) pos = A.proj.mode === 'song' ? PL.songPos : 0;
@@ -216,7 +220,7 @@ A.encodeMp3 = async (ch, sr, kbps) => {
   const tail = enc.flush(); if (tail.length) parts.push(new Uint8Array(tail));
   return new Blob(parts, { type: 'audio/mpeg' });
 };
-A.demo = () => {
+A.demo = (quiet) => {
   const p = M.newProject(); p.name = 'Morning Demo'; p.bpm = 92; p.swing = 0.35;
   const [kick, clap, hat, snare] = p.channels; const pat = p.patterns[0]; pat.name = 'Beat';
   const on = (ch, steps, v) => steps.forEach((s) => M.setCell(pat, ch.id, s, { v: v || M.DEF_VEL, n: 60, g: 1 }));
@@ -226,6 +230,7 @@ A.demo = () => {
   const b2 = M.newPattern(p); b2.name = 'Break'; p.patterns.push(b2);
   [0, 2, 4, 6, 8, 10, 12, 14].forEach((s) => M.setCell(b2, hat.id, s, { v: 0.6, n: 60, g: 1 })); M.setCell(b2, clap.id, 12, { v: M.DEF_VEL, n: 60, g: 1 });
   p.playlist.clips = [{ id: U.uid('k'), pat: pat.id, track: 0, start: 0, len: 48 }, { id: U.uid('k'), pat: b2.id, track: 0, start: 48, len: 16 }];
+  if (quiet) { A.proj = p; return; }
   A.load(p);
 };
 
@@ -275,9 +280,32 @@ A.updateTop = () => {
   const masterK = UI.$('#masterK .knob'); if (masterK) UI.refreshKnob(masterK);
   A.showTime(A.eng.playing ? A.eng.pos() || 0 : null);
 };
+// ---------------- Send to DAWters ----------------
+// On the web: opens DAWters (or the tab it opened before) and hands it the beat once it says it's ready.
+// In the Android app, or if DAWters doesn't answer: saves a .dawsuite.json file for DAWters' File → Import.
+A.DAW_URL = 'https://dawters-and-son.github.io/dawters-and-son/app/';
+A.sendToDAW = (payload) => {
+  payload = Object.assign({ type: 'dawters-send', v: 1, from: 'edk' }, payload);
+  const fname = (String(payload.name || 'Beat').replace(/[^\w\- ]+/g, '').trim() || 'Beat') + '.dawsuite.json';
+  const file = () => A.deliver(new Blob([JSON.stringify(payload)], { type: 'application/json' }), fname).then(() => UI.toast('In DAWters: File → Import from the suite, and pick ' + fname, 5000));
+  if (window.EdkAndroid) return file();
+  const origin = new URL(A.DAW_URL).origin, w = window.open(A.DAW_URL + '#receive', 'dawters');
+  if (!w) return file();
+  let done = false;
+  const on = (e) => {
+    if (e.source !== w || e.origin !== origin) return;
+    if (e.data === 'dawters-ready') w.postMessage(payload, origin);
+    else if (e.data && e.data.type === 'dawters-got') { done = true; window.removeEventListener('message', on); UI.toast(e.data.ok ? 'Sent to DAWters — it\'s on a new Beat track' : 'DAWters could not take that beat', 3500); }
+  };
+  window.addEventListener('message', on);
+  UI.toast('Opening DAWters…', 2000);
+  setTimeout(() => { if (done) return; window.removeEventListener('message', on); UI.toast('DAWters did not answer, so here is a file to import instead', 4000); file(); }, 45000);
+};
+A.sendBeat = () => A.sendToDAW({ kind: 'edk', name: A.proj.name && A.proj.name !== 'Untitled' ? A.proj.name : 'Beat', state: { app: 'edk', v: 1, proj: JSON.parse(JSON.stringify(A.proj)), samples: A.packSamples() } });
 A.fileMenu = (x, y) => UI.menu(x, y, [
   ['New project', async () => { if (await UI.confirm('Start a new project?', 'Anything not saved to a file in this one will be lost.', 'Start new')) A.load(M.newProject()); }],
   ['Open…', A.openFile], ['Save as .edk', A.saveFile],
+  ...(HOST ? [] : [['Send to DAWters (new Beat track)', A.sendBeat]]),
   'hr',
   ['Export song as WAV', () => A.exportAudio('song', 'wav')], ['Export song as MP3', () => A.exportAudio('song', 'mp3')],
   ['Export pattern as WAV', () => A.exportAudio('pat', 'wav')], ['Export pattern as MP3', () => A.exportAudio('pat', 'mp3')],
@@ -319,8 +347,9 @@ A.boot = async () => {
   await A.eng.init();
   await SOUND.render(A.eng.sr);
   let proj = null;
-  try { const s = localStorage.getItem(AUTOSAVE); if (s) proj = JSON.parse(s); } catch (e) { proj = null; }
-  if (proj) { try { await A.restoreSamples(proj); proj = M.migrate(proj); } catch (e) { proj = null; } }
+  if (HOST) { if (HOST.state) { A.unpackSamples(HOST.state.samples); proj = M.migrate(HOST.state.proj); } if (!proj) { A.demo(true); proj = A.proj; } proj.bpm = HOST.bpm(); }
+  else try { const s = localStorage.getItem(AUTOSAVE); if (s) proj = JSON.parse(s); } catch (e) { proj = null; }
+  if (proj && !HOST) { try { await A.restoreSamples(proj); proj = M.migrate(proj); } catch (e) { proj = null; } }
   A.proj = proj || M.newProject();
   A.eng.sync(A.proj); A.hist.reset(A.proj);
   A.eng.onPos = () => {};
@@ -331,6 +360,7 @@ A.boot = async () => {
   addEventListener('resize', U.debounce(() => PL.render(), 200));
   requestAnimationFrame(A.frame);
   window.EDK = A; // handle for tests and the console
+  if (HOST) { UI.$('#splash').remove(); A.pluginReady(); return; }
   const sp = UI.$('#splash'); UI.$('#splashGo').disabled = false; UI.$('#splashGo').textContent = 'Start';
   const go = () => { A.eng.resume(); sp.classList.add('gone'); setTimeout(() => sp.remove(), 450); };
   UI.$('#splashGo').onclick = go;
@@ -344,6 +374,40 @@ A.bootFail = (e) => {
     ? 'This browser will not start the audio engine from a file opened directly. Open the app from its web link, run the "Start" launcher in the web folder, or use Chrome or Edge.'
     : 'The audio engine could not start in this browser (' + (e && e.message ? e.message : e) + '). Try a current Chrome, Edge, Firefox or Safari.';
   const g = UI.$('#splashGo'); if (g) { g.textContent = 'Audio unavailable'; g.disabled = true; }
+};
+// ---------------- plugin API (DAWters and Son) ----------------
+const f32b64 = (f) => { const u = new Uint8Array(f.buffer, f.byteOffset, f.byteLength); let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s); };
+const b64f32 = (s) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Float32Array(u.buffer); };
+A.packSamples = () => { const o = {}; for (const c of A.proj.channels) { const s = c.sample && ENG.userSamples.get(c.sample); if (s && !o[c.sample]) o[c.sample] = { sr: s.sr, name: s.name, ch: s.ch.map(f32b64) }; } return o; };
+A.unpackSamples = (o) => { for (const id in o || {}) ENG.userSamples.set(id, { sr: o[id].sr, name: o[id].name, ch: o[id].ch.map(b64f32) }); };
+A.pluginReady = () => {
+  const api = window.SUITE_PLUGIN = {
+    getState: () => ({ app: 'edk', v: 1, proj: JSON.parse(JSON.stringify(A.proj)), samples: A.packSamples() }),
+    setState: (st) => { if (!st || !st.proj) return; A.unpackSamples(st.samples); const p = M.migrate(JSON.parse(JSON.stringify(st.proj))); p.bpm = HOST.bpm(); A.load(p); },
+    // the host's look-ahead: our notes for its song time [a, b), starting at its context time ca
+    window: (clips, a, b, ca) => {
+      if (A.eng.playing) A.stop(); // our own preview gives way to the host's transport
+      A.proj.bpm = HOST.bpm();
+      const ev = ENG.hostEvents(A.proj, clips, a, b, ca, A.eng.sr);
+      for (const [id, list] of ev) A.eng.graph.post(id, { t: 'ev', ev: list });
+    },
+    clear: () => { A.eng.graph.all({ t: 'clear' }); },
+    render: (octx, o) => ENG.renderHost(Object.assign({}, A.proj, { bpm: HOST.bpm(), loop: Object.assign({}, A.proj.loop, { on: false }) }), octx, o.output, o.clips, o.s, o.e),
+    bpm: (v) => { A.eng.retempo(v); A.proj.bpm = v; A.updateTop(); },
+    info: () => ({ name: A.proj.name, songLen: M.songLen(A.proj), patterns: A.proj.patterns.map((p) => ({ id: p.id, name: p.name, color: p.color, len: p.len })),
+      sections: (A.proj.sections || []).map((s) => ({ id: s.id, name: s.name, color: s.color, start: s.start, len: s.len })), channels: A.proj.channels.length }),
+    // what a clip shows on the host timeline: [step, row, velocity] for its first `max` steps
+    hits: (src, max) => {
+      const out = [], rows = A.proj.channels.map((c) => c.id), L = src === 'song' ? M.songLen(A.proj) : (M.pat(A.proj, src) || { len: 16 }).len;
+      const sl = ENG.clipSlicer(A.proj, { src });
+      for (let k = 0; k < Math.min(L, max || 512); k++) for (const { pat, ps } of sl(k)) rows.forEach((id, r) => { const c = M.cell(pat, id, ps); if (c) out.push([k, r, c.v]); });
+      return { len: L, rows: rows.length, hits: out };
+    },
+    stopPreview: () => { if (A.eng.playing) A.stop(); },
+    name: () => A.proj.name,
+    dispose: () => { A.eng.stop(true); try { A.eng.graph.mVol.disconnect(); } catch (e) { /* gone */ } },
+  };
+  if (HOST.ready) HOST.ready(api);
 };
 const startApp = () => A.boot().catch(A.bootFail);
 if (document.readyState === 'loading') addEventListener('DOMContentLoaded', startApp); else startApp();

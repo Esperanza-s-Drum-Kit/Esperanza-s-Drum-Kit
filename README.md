@@ -8,9 +8,18 @@ AudioWorklet, no libraries, works offline) runs in a browser and ships as an And
 Linux builds to follow from the same Electron shell DAWters uses.
 
 **Free software.** Copyright (C) 2026 Josh Wilk. GNU General Public License, version 3 or (at your option) any later
-version — see [LICENSE](LICENSE). No price, no tiers, no sign-up, no tracking: the app makes no network requests.
+version — see [LICENSE](LICENSE). No price, no tiers, no sign-up, no tracking: the app makes no network requests (Send to DAWters opens the DAWters page, only when you choose it).
 
-## 0.2.1 — synth fixes (this release)
+## 0.3.0 — inside DAWters (this release)
+
+- **Beat tracks in DAWters and Son 2.4:** a whole Drum Kit project lives on a DAWters track. Its song, its
+  sections and its patterns go on the DAWters timeline as clips, render sample-for-sample the same as here, and
+  double-clicking one opens this editor inside DAWters.
+- **Send to DAWters** (File menu): on the web it opens DAWters and puts this beat on a new Beat track; the
+  Android app saves a `.dawsuite.json` for DAWters' File → Import from the suite (which also takes `.edk` files).
+  This is the only time the app opens anything on the internet, and only when you choose it.
+
+## 0.2.1 — synth fixes
 
 - Turning a channel's **Home note** now moves the key of every step it already plays, in every pattern (before, it only set the note for new steps).
 - Clicking a **synth** in the Sounds browser plays a short preview, as drums already did, and every knob in a channel's settings plays the sound when you let go, so each change is heard.
